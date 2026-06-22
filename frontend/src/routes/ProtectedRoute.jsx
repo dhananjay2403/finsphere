@@ -5,6 +5,11 @@ import { ROUTES } from '../utils/constants';
 
 
 function ProtectedRoute({ children }) {
+  const DEMO_MODE = true; // Temporary bypass for recruiters
+
+  if (DEMO_MODE) {
+    return children;
+  }
 
   const { isAuthenticated, isLoading } = useAuth();
   const location = useLocation();

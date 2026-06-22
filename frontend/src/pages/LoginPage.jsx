@@ -163,6 +163,20 @@ function LoginPage() {
         </Button>
       </Box>
 
+      <Button
+        variant="outlined"
+        color="primary"
+        fullWidth
+        size="large"
+        onClick={() => navigate(ROUTES.DASHBOARD)}
+        sx={{ mt: 2, py: 1.25 }}
+      >
+        Explore Demo
+      </Button>
+      <Typography variant="caption" color="text.secondary" display="block" textAlign="center" sx={{ mt: 1 }}>
+        Preview FinSphere without creating an account.
+      </Typography>
+
       <Divider sx={{ my: 3 }}>
         <Typography variant="caption" color="text.secondary">
           or

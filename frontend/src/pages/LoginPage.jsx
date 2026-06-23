@@ -31,19 +31,24 @@ function LoginPage() {
 
   const redirectTo = location.state?.from?.pathname || ROUTES.DASHBOARD;
 
+  const handleDemoLogin = () => {
+    const mockUser = {
+      _id: 'mock_id_123',
+      name: 'Demo User',
+      email: 'demo@finsphere.com',
+      balance: 100000,
+    };
+    login(mockUser, 'mock_jwt_token');
+    navigate(redirectTo, { replace: true });
+  };
+
   // Auto-login bypass for developer/mobile testing using ?demo=true query param
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     if (params.get('demo') === 'true') {
-      const mockUser = {
-        _id: 'mock_id_123',
-        name: 'Demo User',
-        email: 'demo@finsphere.com',
-        balance: 100000,
-      };
-      login(mockUser, 'mock_jwt_token');
-      navigate(redirectTo, { replace: true });
+      handleDemoLogin();
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [login, navigate, redirectTo]);
 
   const handleChange = (e) => {
@@ -168,7 +173,7 @@ function LoginPage() {
         color="primary"
         fullWidth
         size="large"
-        onClick={() => navigate(ROUTES.DASHBOARD)}
+        onClick={handleDemoLogin}
         sx={{ mt: 2, py: 1.25 }}
       >
         Explore Demo

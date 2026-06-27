@@ -143,94 +143,19 @@ Each milestone is independently testable. We do not proceed to the next mileston
 
 ---
 
-## Milestone 11 — Stock Data Integration
+## Milestone 11 — Portfolio APIs ✅
 
-**Status**: Not started
+**Status**: Complete
 
-- [ ] External stock API adapter (`services/stockService.js`)
-- [ ] `GET /api/stocks/search?q=`
-- [ ] `GET /api/stocks/:symbol/quote`
-- [ ] `GET /api/stocks/:symbol/chart?range=`
-- [ ] Basic caching layer
+- [x] `controllers/portfolioController.js` — `getHoldings`, `getSummary`, `getCash`
+- [x] `routes/portfolio.js` — `GET /api/portfolio/holdings`, `/summary`, `/cash`
+- [x] All routes protected by `authMiddleware.protect`
+- [x] `server.js` updated — `app.use('/api/portfolio', ...)`
+- [x] Holdings response includes `totalInvested`, `currentPrice` (null), `unrealisedPnL` (null) placeholders
+- [x] Summary response includes `cashBalance`, `totalInvested`, `currentValue`, `totalReturn`, `totalReturnPct`, `portfolioValue`
+- [x] Mongoose `.aggregate()` used for `totalInvested` — single DB round-trip
 
-**Test**: Search "AAPL" → Get quote → Get 1M chart data
+**Note**: `currentValue` === `totalInvested` and `totalReturn` === 0 until live price feed
+is integrated in Milestone 12 (Stock Data Integration).
 
----
-
-## Milestone 4 — Trading Engine
-
-**Status**: Not started
-
-- [ ] Holding model
-- [ ] Trade model
-- [ ] `POST /api/trades/buy`
-- [ ] `POST /api/trades/sell`
-- [ ] `GET /api/trades/history`
-
-**Test**: Buy 10 AAPL → Balance decreased → Holding exists → Sell 5 → Balance increased
-
----
-
-## Milestone 5 — Portfolio & Dashboard APIs
-
-**Status**: Not started
-
-- [ ] `GET /api/portfolio`
-- [ ] `GET /api/portfolio/summary`
-- [ ] `GET /api/portfolio/allocation`
-- [ ] `GET /api/portfolio/health`
-- [ ] PortfolioSnapshot model + cron job
-- [ ] `GET /api/portfolio/history`
-
-**Test**: After trades, verify correct holdings, P&L, and allocation
-
----
-
-## Milestone 6 — Watchlist
-
-**Status**: Not started
-
-- [ ] Watchlist model
-- [ ] `GET /api/watchlist`
-- [ ] `POST /api/watchlist`
-- [ ] `DELETE /api/watchlist/:symbol`
-
-**Test**: Add 3 symbols → List shows 3 → Remove 1 → List shows 2
-
----
-
-## Milestone 7 — News Feed
-
-**Status**: Not started
-
-- [ ] External news API adapter (`services/newsService.js`)
-- [ ] `GET /api/news?page=&limit=&q=`
-
-**Test**: Fetch page 1 → Keyword filter → Verify pagination
-
----
-
-## Milestone 8 — Learning Progress
-
-**Status**: Not started
-
-- [ ] LearningProgress model
-- [ ] `GET /api/learn/progress`
-- [ ] `POST /api/learn/:slug/complete`
-- [ ] `POST /api/learn/:slug/quiz`
-
-**Test**: Complete lesson → Progress shows completed → Submit quiz → Score persists
-
----
-
-## Milestone 9 — Hardening & Polish
-
-**Status**: Not started
-
-- [ ] Input validation on all endpoints
-- [ ] Rate limiting
-- [ ] CORS production config
-- [ ] API documentation (Swagger / Postman collection)
-- [ ] Full end-to-end test
-
-**Test**: Complete flow from register to trade to portfolio to learning
+**Test**: See Postman tests in docs/PORTFOLIO_API.md

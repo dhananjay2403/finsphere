@@ -130,7 +130,20 @@ Each milestone is independently testable. We do not proceed to the next mileston
 
 ---
 
-## Milestone 10 — Stock Data Integration
+## Milestone 10 — Portfolio Data Models ✅
+
+**Status**: Complete
+
+- [x] `models/Holding.js` — current user positions, compound unique index `{userId, symbol}`
+- [x] `models/Trade.js` — immutable trade ledger, `enum: ['buy', 'sell']`
+- [x] `models/Watchlist.js` — 1-to-1 with embedded symbols array, unique index on `userId`
+- [x] `models/PortfolioSnapshot.js` — daily value snapshots, compound unique index `{userId, date}`
+
+**Test**: All 4 models load without errors; collections named correctly.
+
+---
+
+## Milestone 11 — Stock Data Integration
 
 **Status**: Not started
 

@@ -99,4 +99,18 @@ const login = async (req, res, next) => {
 };
 
 
-module.exports = { register, login };
+// @desc    Get currently authenticated user
+// @route   GET /api/auth/me
+// @access  Protected
+const getMe = (req, res) => {
+
+  const { _id, name, email, balance, createdAt } = req.user;
+
+  res.status(200).json({
+    success: true,
+    user: { _id, name, email, balance, createdAt },
+  });
+};
+
+
+module.exports = { register, login, getMe };

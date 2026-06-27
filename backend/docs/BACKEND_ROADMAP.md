@@ -103,14 +103,16 @@ Each milestone is independently testable. We do not proceed to the next mileston
 
 ---
 
-## Milestone 8 — Authentication: Protected Routes
+## Milestone 8 — Authentication: Protected Routes ✅
 
-**Status**: Not started
+**Status**: Complete
 
-- [ ] JWT middleware (`middleware/auth.js`)
-- [ ] `GET /api/auth/me`
+- [x] `middleware/authMiddleware.js` (`protect`)
+- [x] Bearer token extraction from `Authorization` header
+- [x] JWT verification + user attached to `req.user`
+- [x] `GET /api/auth/me`
 
-**Test**: `GET /auth/me` with valid token → user. Without token → 401. Expired token → 401.
+**Test**: Valid token → 200 user. No token → 401. Invalid token → 401. Wrong format → 401.
 
 ---
 

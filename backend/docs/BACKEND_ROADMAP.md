@@ -193,3 +193,54 @@ is integrated in Milestone 12 (Stock Data Integration).
 - [x] 409 on duplicate, 404 on remove-not-found
 
 **Test**: GET empty → POST AAPL → POST MSFT → POST AAPL (409) → GET shows 2 → DELETE AAPL → GET shows 1 → DELETE GOOGL (404)
+
+---
+
+## Milestone 14 — Finnhub Backend Integration ✅
+
+**Status**: Complete
+
+- [x] `services/stockService.js` — provider-agnostic service layer (Finnhub adapter)
+- [x] `controllers/stocksController.js` — thin delegation; no Finnhub knowledge
+- [x] `routes/stocks.js` — 5 protected GET endpoints with express-validator
+- [x] `server.js` updated — `app.use('/api/stocks', ...)`
+- [x] `.env.example` updated — `FINNHUB_API_KEY` documented
+- [x] `axios` installed as backend dependency
+- [x] Centralised error handling — 404 (invalid symbol), 429 (rate limit), 502 (upstream error), 503 (network/key missing)
+
+**Endpoints**: `GET /quote/:symbol`, `/profile/:symbol`, `/search?q=`, `/news/:symbol`, `/history/:symbol`
+
+**Test**: GET /api/stocks/quote/AAPL → 200 with price data. GET /api/stocks/quote/INVALIDSYMBOL999 → 404.
+
+---
+
+## Milestone 15A — Trade Page Frontend Integration ✅
+
+**Status**: Complete
+
+### New files
+- [x] `frontend/src/services/stockService.js` — thin wrappers for all 5 `/api/stocks/*` endpoints (`search`, `getQuote`, `getProfile`, `getHistory`, `getNews`)
+- [x] `frontend/src/services/tradeService.js` — thin wrappers for `/api/trades/buy`, `/api/trades/sell`, `getHistory`
+
+### TradePage integration (`frontend/src/pages/TradePage.jsx`)
+- [x] **Live search** — debounced (400 ms) `GET /api/stocks/search?q=` with autocomplete dropdown; `ClickAwayListener` closes it; "No results" empty state
+- [x] **Stock quote** — `GET /api/stocks/quote/:symbol` on result selection → populates symbol, price, change, day metrics
+- [x] **Company profile** — `GET /api/stocks/profile/:symbol` → company name, exchange/country chips, logo avatar, market cap, industry
+- [x] **Historical chart** — `GET /api/stocks/history/:symbol` with per-timeframe resolution mapping (1D→30min, 1W→60min, 1M/6M/1Y→Daily); recharts AreaChart with formatted time labels
+- [x] **Buy order** — `POST /api/trades/buy` with symbol, name, quantity, pricePerShare; success/error feedback; cash balance auto-updates
+- [x] **Sell order** — `POST /api/trades/sell`; same flow
+- [x] **Cash Available** — `GET /api/portfolio/cash` on mount; updates after each trade
+- [x] **Watchlist** — `GET /api/watchlist` on mount; `POST` / `DELETE` add/remove; clicking a watchlist item loads that stock; persists across sessions
+- [x] **Recent Orders** — `GET /api/trades/history?limit=5` on mount; refreshes after each trade; buy/sell colour-coded rows
+- [x] **Loading states** — `Skeleton` for all async sections; `CircularProgress` inside Buy/Sell buttons during execution
+- [x] **Error handling** — `Alert` components for order errors, stock load errors, search empty state
+- [x] **Estimated total** — derived client-side from `quantity × stock.price` (no backend call)
+- [x] Entire original responsive layout preserved — no UI redesign
+
+**Test**:
+1. Search "AAPL" → dropdown appears → select → stock card populates with live price
+2. Switch timeframes → chart re-fetches with correct resolution
+3. Enter quantity 5 → estimated total shows → click Buy → success alert → cash decreases → order appears in Recent Orders
+4. Click Sell on a held stock → success / "Insufficient shares" error handled
+5. Add stock to Watchlist → persists on page refresh → Remove works
+6. Refresh page → watchlist, cash balance, recent orders all reload from backend

@@ -116,7 +116,21 @@ Each milestone is independently testable. We do not proceed to the next mileston
 
 ---
 
-## Milestone 3 — Stock Data Integration
+## Milestone 9 — Frontend Authentication Integration ✅
+
+**Status**: Complete
+
+- [x] `AuthContext.jsx` — validates stored token via `GET /api/auth/me` on app load
+- [x] Expired/invalid tokens cleared automatically on startup
+- [x] `authController.js` — token now returned on register (auto-login after signup)
+- [x] `authService.js` — no changes required (already correct)
+- [x] `api.js` — no changes required (Bearer injection + 401 redirect already in place)
+
+**Test**: Register → auto-login. Page refresh → session restored via `/auth/me`. Expired token → cleared, redirect to login.
+
+---
+
+## Milestone 10 — Stock Data Integration
 
 **Status**: Not started
 

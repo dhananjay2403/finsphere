@@ -1,5 +1,6 @@
 import { createContext, useState, useEffect, useCallback } from 'react';
 import { LOCAL_STORAGE_KEYS } from '../utils/constants';
+import authService from '../services/authService';
 
 
 export const AuthContext = createContext(null);
@@ -12,25 +13,29 @@ export function AuthProvider({ children }) {
 
   useEffect(() => {
     const storedToken = localStorage.getItem(LOCAL_STORAGE_KEYS.TOKEN);
-    const storedUser = localStorage.getItem(LOCAL_STORAGE_KEYS.USER);
 
-    if (storedToken && storedUser) {
-      try {
-        setToken(storedToken);
-        setUser(JSON.parse(storedUser));
-      } catch {
-        // Corrupted storage — clear it so the user isn't stuck
-        localStorage.removeItem(LOCAL_STORAGE_KEYS.TOKEN);
-        localStorage.removeItem(LOCAL_STORAGE_KEYS.USER);
-      }
+    if (!storedToken) {
+      setIsLoading(false);
+      return;
     }
 
-    // Always mark loading as done, even if nothing was found
-    setIsLoading(false);
+    // Validate the stored token against the backend — catches expired/revoked tokens
+    authService.getProfile()
+      .then(({ user: freshUser }) => {
+        setToken(storedToken);
+        setUser(freshUser);
+      })
+      .catch(() => {
+        // Token is invalid or expired — clear stale session
+        localStorage.removeItem(LOCAL_STORAGE_KEYS.TOKEN);
+        localStorage.removeItem(LOCAL_STORAGE_KEYS.USER);
+      })
+      .finally(() => {
+        setIsLoading(false);
+      });
   }, []);
 
   const login = useCallback((userData, authToken) => {
-
     setUser(userData);
     setToken(authToken);
     localStorage.setItem(LOCAL_STORAGE_KEYS.TOKEN, authToken);
@@ -38,7 +43,6 @@ export function AuthProvider({ children }) {
   }, []);
 
   const logout = useCallback(() => {
-
     setUser(null);
     setToken(null);
     localStorage.removeItem(LOCAL_STORAGE_KEYS.TOKEN);
@@ -56,3 +60,4 @@ export function AuthProvider({ children }) {
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }
+

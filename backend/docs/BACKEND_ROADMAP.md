@@ -49,11 +49,23 @@ Each milestone is independently testable. We do not proceed to the next mileston
 
 ---
 
-## Milestone 4 — Authentication
+## Milestone 4 — User Model ✅
+
+**Status**: Complete
+
+- [x] User schema (`models/User.js`)
+- [x] Fields: name, email (unique, validated), password (select: false), balance (default: 100k)
+- [x] Mongoose validation, timestamps, indexes
+
+**Test**: Model loads without errors; schema validation works
+
+---
+
+## Milestone 5 — Authentication
 
 **Status**: Not started
 
-- [ ] User model (name, email, hashed password, balance)
+- [ ] Password hashing (bcrypt pre-save hook)
 - [ ] `POST /api/auth/register`
 - [ ] `POST /api/auth/login`
 - [ ] `GET /api/auth/me`

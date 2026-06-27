@@ -1,4 +1,5 @@
 const bcrypt = require('bcryptjs');
+const generateToken = require('../utils/generateToken');
 const User = require('../models/User');
 
 // @desc    Register a new user
@@ -76,14 +77,18 @@ const login = async (req, res, next) => {
       });
     }
 
+    const token = generateToken(user._id);
+
     res.status(200).json({
       success: true,
       message: 'Login successful',
+      token,
       user: {
         _id: user._id,
         name: user.name,
         email: user.email,
         balance: user.balance,
+        createdAt: user.createdAt,
       },
     });
   }

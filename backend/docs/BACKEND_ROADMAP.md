@@ -89,15 +89,28 @@ Each milestone is independently testable. We do not proceed to the next mileston
 
 ---
 
-## Milestone 7 — Authentication: JWT
+## Milestone 7 — Authentication: JWT ✅
+
+**Status**: Complete
+
+- [x] `utils/generateToken.js`
+- [x] JWT generated on successful login
+- [x] Token contains only `{ id }` — no sensitive data
+- [x] Token expiry via `JWT_EXPIRE` env var (default: 7d)
+- [x] `JWT_SECRET` + `JWT_EXPIRE` added to `.env.example`
+
+**Test**: Login → token returned. Decode confirms `{ id, iat, exp }` only.
+
+---
+
+## Milestone 8 — Authentication: Protected Routes
 
 **Status**: Not started
 
-- [ ] JWT generation on login (`jsonwebtoken`)
-- [ ] `GET /api/auth/me`
 - [ ] JWT middleware (`middleware/auth.js`)
+- [ ] `GET /api/auth/me`
 
-**Test**: Login → token returned. `GET /auth/me` with token → user. Without token → 401.
+**Test**: `GET /auth/me` with valid token → user. Without token → 401. Expired token → 401.
 
 ---
 

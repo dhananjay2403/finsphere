@@ -76,16 +76,28 @@ Each milestone is independently testable. We do not proceed to the next mileston
 
 ---
 
-## Milestone 6 — Authentication: Login & JWT
+## Milestone 6 — Authentication: Login ✅
+
+**Status**: Complete
+
+- [x] `POST /api/auth/login`
+- [x] `bcrypt.compare()` password verification
+- [x] Generic 401 for both wrong email and wrong password
+- [x] Login validation (presence only — avoids field enumeration hints)
+
+**Test**: Valid → 200. Wrong password → 401. Unknown email → 401. Missing fields → 422.
+
+---
+
+## Milestone 7 — Authentication: JWT
 
 **Status**: Not started
 
-- [ ] `POST /api/auth/login`
-- [ ] JWT generation (`jsonwebtoken`)
+- [ ] JWT generation on login (`jsonwebtoken`)
 - [ ] `GET /api/auth/me`
 - [ ] JWT middleware (`middleware/auth.js`)
 
-**Test**: Login → token. `GET /auth/me` with token → user. Without token → 401.
+**Test**: Login → token returned. `GET /auth/me` with token → user. Without token → 401.
 
 ---
 

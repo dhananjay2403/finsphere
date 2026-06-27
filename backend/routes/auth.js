@@ -1,6 +1,6 @@
 const express = require('express');
 const { body } = require('express-validator');
-const { register } = require('../controllers/authController');
+const { register, login } = require('../controllers/authController');
 const validate = require('../middleware/validate');
 
 const router = express.Router();
@@ -25,7 +25,16 @@ const registerRules = [
     .isLength({ max: 128 }).withMessage('Password cannot exceed 128 characters'),
 ];
 
+// Validation rules for login — presence only, no format hints (avoids field enumeration)
+const loginRules = [
+  body('email').trim().notEmpty().withMessage('Email is required'),
+  body('password').notEmpty().withMessage('Password is required'),
+];
+
 // POST /api/auth/register
 router.post('/register', registerRules, validate, register);
+
+// POST /api/auth/login
+router.post('/login', loginRules, validate, login);
 
 module.exports = router;

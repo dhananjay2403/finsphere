@@ -48,4 +48,50 @@ const register = async (req, res, next) => {
 };
 
 
-module.exports = { register };
+// @desc    Login user
+// @route   POST /api/auth/login
+// @access  Public
+const login = async (req, res, next) => {
+
+  try {
+    const { email, password } = req.body;
+
+    // Find user — explicitly include password (select: false on schema)
+    const user = await User.findOne({ email }).select('+password');
+
+    // Generic message for both "not found" and "wrong password" — prevents email enumeration
+    if (!user) {
+      return res.status(401).json({
+        success: false,
+        message: 'Invalid credentials',
+      });
+    }
+
+    // Compare submitted password against stored hash
+    const isMatch = await bcrypt.compare(password, user.password);
+    if (!isMatch) {
+      return res.status(401).json({
+        success: false,
+        message: 'Invalid credentials',
+      });
+    }
+
+    res.status(200).json({
+      success: true,
+      message: 'Login successful',
+      user: {
+        _id: user._id,
+        name: user.name,
+        email: user.email,
+        balance: user.balance,
+      },
+    });
+  }
+
+  catch (err) {
+    next(err);
+  }
+};
+
+
+module.exports = { register, login };

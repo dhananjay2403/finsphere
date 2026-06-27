@@ -61,18 +61,31 @@ Each milestone is independently testable. We do not proceed to the next mileston
 
 ---
 
-## Milestone 5 — Authentication
+## Milestone 5 — Authentication: Register ✅
+
+**Status**: Complete
+
+- [x] Password hashing (bcrypt, 10 salt rounds)
+- [x] Request validation (`middleware/validate.js`, `express-validator`)
+- [x] `POST /api/auth/register`
+- [x] Duplicate email check (409)
+- [x] User saved to MongoDB with hashed password
+- [x] `maxlength: 128` on password field (M4 PR fix)
+
+**Test**: Register → 201. Duplicate → 409. Invalid body → 422.
+
+---
+
+## Milestone 6 — Authentication: Login & JWT
 
 **Status**: Not started
 
-- [ ] Password hashing (bcrypt pre-save hook)
-- [ ] `POST /api/auth/register`
 - [ ] `POST /api/auth/login`
+- [ ] JWT generation (`jsonwebtoken`)
 - [ ] `GET /api/auth/me`
 - [ ] JWT middleware (`middleware/auth.js`)
-- [ ] Input validation (`middleware/validate.js`)
 
-**Test**: Register → Login → Access `/auth/me` with token → Get 401 without token
+**Test**: Login → token. `GET /auth/me` with token → user. Without token → 401.
 
 ---
 

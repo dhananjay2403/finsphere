@@ -31,8 +31,8 @@ app.get('/api/health', (_req, res) => {
   });
 });
 
-// Routes (will be added in later milestones)
-// app.use('/api/auth', require('./routes/auth'));
+// Routes
+app.use('/api/auth', require('./routes/auth'));
 
 // 404 handler — must come after all route definitions
 app.use((_req, res) => {

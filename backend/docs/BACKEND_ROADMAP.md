@@ -49,23 +49,6 @@ Each milestone is independently testable. We do not proceed to the next mileston
 
 ---
 
-## Milestone 12 — Paper Trading ✅
-
-**Status**: Complete
-
-- [x] `controllers/tradeController.js` — `buyStock`, `sellStock`, `getTradeHistory`
-- [x] `routes/trades.js` — `POST /buy`, `POST /sell`, `GET /history`
-- [x] `server.js` updated — `app.use('/api/trades', ...)`
-- [x] Weighted average cost price on every buy
-- [x] Position deleted when fully sold (`quantity === 0`)
-- [x] Paginated trade history (`?page=&limit=&symbol=`)
-- [x] express-validator on all mutating endpoints
-- [x] Ordered atomic writes with balance guard (no negative balance)
-
-**Test**: Buy 10 AAPL → balance decreases → Holding created → Buy 5 more → avgCostPrice recalculated → Sell 5 → quantity decremented → Sell 10 → Holding deleted → balance restored
-
----
-
 ## Milestone 4 — User Model ✅
 
 **Status**: Complete
@@ -176,3 +159,37 @@ Each milestone is independently testable. We do not proceed to the next mileston
 is integrated in Milestone 12 (Stock Data Integration).
 
 **Test**: See Postman tests in docs/PORTFOLIO_API.md
+
+---
+
+## Milestone 12 — Paper Trading ✅
+
+**Status**: Complete
+
+- [x] `controllers/tradeController.js` — `buyStock`, `sellStock`, `getTradeHistory`
+- [x] `routes/trades.js` — `POST /buy`, `POST /sell`, `GET /history`
+- [x] `server.js` updated — `app.use('/api/trades', ...)`
+- [x] Weighted average cost price on every buy
+- [x] Position deleted when fully sold (`quantity === 0`)
+- [x] Paginated trade history (`?page=&limit=&symbol=`)
+- [x] express-validator on all mutating endpoints
+- [x] Ordered atomic writes with balance guard (no negative balance)
+
+**Test**: Buy 10 AAPL → balance decreases → Holding created → Buy 5 more → avgCostPrice recalculated → Sell 5 → quantity decremented → Sell 10 → Holding deleted → balance restored
+
+---
+
+## Milestone 13 — Watchlist ✅
+
+**Status**: Complete
+
+- [x] `controllers/watchlistController.js` — `getWatchlist`, `addToWatchlist`, `removeFromWatchlist`
+- [x] `routes/watchlist.js` — `GET /`, `POST /`, `DELETE /:symbol`
+- [x] `server.js` updated — `app.use('/api/watchlist', ...)`
+- [x] Upsert on first add — no separate seed step required
+- [x] Atomic duplicate prevention via `$not: $elemMatch` in the query filter
+- [x] Atomic removal via `$pull` on the embedded symbols array
+- [x] express-validator on body (add) and URL param (remove)
+- [x] 409 on duplicate, 404 on remove-not-found
+
+**Test**: GET empty → POST AAPL → POST MSFT → POST AAPL (409) → GET shows 2 → DELETE AAPL → GET shows 1 → DELETE GOOGL (404)

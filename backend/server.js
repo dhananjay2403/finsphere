@@ -32,9 +32,10 @@ app.get('/api/health', (_req, res) => {
 });
 
 // Routes
-app.use('/api/auth',      require('./routes/auth'));
+app.use('/api/auth', require('./routes/auth'));
 app.use('/api/portfolio', require('./routes/portfolio'));
-app.use('/api/trades',    require('./routes/trades'));
+app.use('/api/trades', require('./routes/trades'));
+app.use('/api/watchlist', require('./routes/watchlist'));
 
 // 404 handler — must come after all route definitions
 app.use((_req, res) => {

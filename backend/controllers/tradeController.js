@@ -1,6 +1,6 @@
-const User    = require('../models/User');
+const User = require('../models/User');
 const Holding = require('../models/Holding');
-const Trade   = require('../models/Trade');
+const Trade = require('../models/Trade');
 
 
 // ---------------------------------------------------------------------------
@@ -21,11 +21,11 @@ const buyStock = async (req, res, next) => {
   try {
     const { symbol, name, quantity, pricePerShare } = req.body;
 
-    const qty   = Number(quantity);
+    const qty = Number(quantity);
     const price = Number(pricePerShare);
     const totalAmount = parseFloat((qty * price).toFixed(2));
 
-    // ── 1. Check sufficient balance ────────────────────────────────────────
+    // 1. Check sufficient balance 
     if (req.user.balance < totalAmount) {
       return res.status(400).json({
         success: false,
@@ -33,7 +33,7 @@ const buyStock = async (req, res, next) => {
       });
     }
 
-    // ── 2. Debit balance ───────────────────────────────────────────────────
+    // 2. Debit balance 
     // $inc is atomic — cannot go below 0 because User schema has min: 0
     const updatedUser = await User.findByIdAndUpdate(
       req.user._id,
@@ -51,7 +51,7 @@ const buyStock = async (req, res, next) => {
       });
     }
 
-    // ── 3. Upsert Holding (weighted average cost price) ────────────────────
+    // 3. Upsert Holding (weighted average cost price) 
     const existing = await Holding.findOne({ userId: req.user._id, symbol: symbol.toUpperCase() });
 
     if (existing) {
@@ -62,27 +62,27 @@ const buyStock = async (req, res, next) => {
       );
 
       await Holding.findByIdAndUpdate(existing._id, {
-        quantity:     newQty,
+        quantity: newQty,
         avgCostPrice: newAvg,
       });
     } else {
       // First buy — create a new holding document
       await Holding.create({
-        userId:       req.user._id,
-        symbol:       symbol.toUpperCase(),
+        userId: req.user._id,
+        symbol: symbol.toUpperCase(),
         name,
-        quantity:     qty,
+        quantity: qty,
         avgCostPrice: price,
       });
     }
 
-    // ── 4. Create immutable Trade record ───────────────────────────────────
+    // 4. Create immutable Trade record 
     const trade = await Trade.create({
-      userId:       req.user._id,
-      symbol:       symbol.toUpperCase(),
+      userId: req.user._id,
+      symbol: symbol.toUpperCase(),
       name,
-      type:         'buy',
-      quantity:     qty,
+      type: 'buy',
+      quantity: qty,
       pricePerShare: price,
       totalAmount,
     });
@@ -92,14 +92,14 @@ const buyStock = async (req, res, next) => {
       message: `Successfully bought ${qty} share${qty > 1 ? 's' : ''} of ${symbol.toUpperCase()}`,
       data: {
         trade: {
-          _id:          trade._id,
-          symbol:       trade.symbol,
-          name:         trade.name,
-          type:         trade.type,
-          quantity:     trade.quantity,
+          _id: trade._id,
+          symbol: trade.symbol,
+          name: trade.name,
+          type: trade.type,
+          quantity: trade.quantity,
           pricePerShare: trade.pricePerShare,
-          totalAmount:  trade.totalAmount,
-          executedAt:   trade.createdAt,
+          totalAmount: trade.totalAmount,
+          executedAt: trade.createdAt,
         },
         cashBalance: updatedUser.balance,
       },
@@ -131,11 +131,11 @@ const sellStock = async (req, res, next) => {
   try {
     const { symbol, quantity, pricePerShare } = req.body;
 
-    const qty   = Number(quantity);
+    const qty = Number(quantity);
     const price = Number(pricePerShare);
     const totalAmount = parseFloat((qty * price).toFixed(2));
 
-    // ── 1. Find existing holding ───────────────────────────────────────────
+    // 1. Find existing holding 
     const holding = await Holding.findOne({ userId: req.user._id, symbol: symbol.toUpperCase() });
 
     if (!holding) {
@@ -145,7 +145,7 @@ const sellStock = async (req, res, next) => {
       });
     }
 
-    // ── 2. Check sufficient quantity ───────────────────────────────────────
+    // 2. Check sufficient quantity 
     if (holding.quantity < qty) {
       return res.status(400).json({
         success: false,
@@ -153,14 +153,14 @@ const sellStock = async (req, res, next) => {
       });
     }
 
-    // ── 3. Credit balance ──────────────────────────────────────────────────
+    // 3. Credit balance 
     const updatedUser = await User.findByIdAndUpdate(
       req.user._id,
       { $inc: { balance: totalAmount } },
       { new: true, runValidators: true }
     );
 
-    // ── 4. Update or delete Holding ────────────────────────────────────────
+    // 4. Update or delete Holding 
     const remainingQty = holding.quantity - qty;
 
     if (remainingQty === 0) {
@@ -171,13 +171,13 @@ const sellStock = async (req, res, next) => {
       await Holding.findByIdAndUpdate(holding._id, { quantity: remainingQty });
     }
 
-    // ── 5. Create immutable Trade record ───────────────────────────────────
+    // 5. Create immutable Trade record 
     const trade = await Trade.create({
-      userId:       req.user._id,
-      symbol:       symbol.toUpperCase(),
-      name:         holding.name,
-      type:         'sell',
-      quantity:     qty,
+      userId: req.user._id,
+      symbol: symbol.toUpperCase(),
+      name: holding.name,
+      type: 'sell',
+      quantity: qty,
       pricePerShare: price,
       totalAmount,
     });
@@ -187,14 +187,14 @@ const sellStock = async (req, res, next) => {
       message: `Successfully sold ${qty} share${qty > 1 ? 's' : ''} of ${symbol.toUpperCase()}`,
       data: {
         trade: {
-          _id:          trade._id,
-          symbol:       trade.symbol,
-          name:         trade.name,
-          type:         trade.type,
-          quantity:     trade.quantity,
+          _id: trade._id,
+          symbol: trade.symbol,
+          name: trade.name,
+          type: trade.type,
+          quantity: trade.quantity,
           pricePerShare: trade.pricePerShare,
-          totalAmount:  trade.totalAmount,
-          executedAt:   trade.createdAt,
+          totalAmount: trade.totalAmount,
+          executedAt: trade.createdAt,
         },
         cashBalance: updatedUser.balance,
       },
@@ -220,9 +220,9 @@ const sellStock = async (req, res, next) => {
 const getTradeHistory = async (req, res, next) => {
 
   try {
-    const page   = Math.max(1, parseInt(req.query.page)  || 1);
-    const limit  = Math.min(100, parseInt(req.query.limit) || 20);
-    const skip   = (page - 1) * limit;
+    const page = Math.max(1, parseInt(req.query.page) || 1);
+    const limit = Math.min(100, parseInt(req.query.limit) || 20);
+    const skip = (page - 1) * limit;
 
     // Build filter — optionally narrow to a specific symbol
     const filter = { userId: req.user._id };
@@ -241,23 +241,23 @@ const getTradeHistory = async (req, res, next) => {
 
     // Normalise field name: expose createdAt as executedAt for clarity
     const payload = trades.map((t) => ({
-      _id:          t._id,
-      symbol:       t.symbol,
-      name:         t.name,
-      type:         t.type,
-      quantity:     t.quantity,
+      _id: t._id,
+      symbol: t.symbol,
+      name: t.name,
+      type: t.type,
+      quantity: t.quantity,
       pricePerShare: t.pricePerShare,
-      totalAmount:  t.totalAmount,
-      executedAt:   t.createdAt,
+      totalAmount: t.totalAmount,
+      executedAt: t.createdAt,
     }));
 
     return res.status(200).json({
       success: true,
-      count:      payload.length,
+      count: payload.length,
       total,
       page,
       totalPages: Math.ceil(total / limit),
-      data:       payload,
+      data: payload,
     });
   }
 

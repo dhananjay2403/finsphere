@@ -289,3 +289,64 @@ is integrated in Milestone 12 (Stock Data Integration).
 7. P&L Summary rows show real numbers from backend (not Skeletons)
 8. Portfolio Breakdown bar and Allocation donut reflect real position weights
 9. Largest Position card shows actual top holding, not hard-coded AAPL
+
+---
+
+## Milestone 15C — News Integration, Bug Fixes & Cleanup ✅
+
+**Status**: Complete
+
+### New endpoints
+- [x] `GET /api/stocks/market-news?category=general` — general Finnhub market news (no symbol required)
+  - Supported categories: `general`, `forex`, `crypto`, `merger`
+  - Returns up to 30 articles: `{ id, headline, source, url, summary, datetime, image, category }`
+
+### Backend changes
+- [x] `backend/services/stockService.js` — added `getMarketNews(category)` method
+- [x] `backend/controllers/stocksController.js` — added `marketNews` controller action
+- [x] `backend/routes/stocks.js` — registered `GET /market-news` route
+- [x] `backend/server.js` — changed `app.listen(PORT)` to `app.listen(PORT, '0.0.0.0')` for LAN access
+
+### Frontend service changes
+- [x] `frontend/src/services/stockService.js` — added `getMarketNews(category)` method
+
+### News page (`frontend/src/pages/News.jsx`)
+- [x] Live Finnhub market news grid (replaces static skeleton placeholders)
+- [x] Category filter tabs: General / Forex / Crypto / Mergers — re-fetches on change
+- [x] Clickable news cards open original article in a new tab
+- [x] Thumbnail image with fallback to `NewspaperIcon` on load error
+- [x] Source chip overlaid on thumbnail
+- [x] Relative timestamp via `timeAgo()` helper
+- [x] `SKELETON_COUNT=9` animated loading cards while fetching
+- [x] Error `Alert` if endpoint fails
+- [x] Empty state when API returns 0 articles
+- [x] Article count badge in header
+- [x] "In development" chip and "coming soon" banner removed
+
+### Mobile / LAN access bug fix
+- Root cause: `app.listen(PORT)` defaults to `127.0.0.1` — LAN devices cannot reach it.
+  `VITE_API_URL=http://localhost:5001/api` resolves to the *client* device, not the server Mac.
+- [x] `backend/server.js` — listen on `0.0.0.0` so port 5001 is reachable from LAN
+- [x] `frontend/vite.config.js` — added `host: true` so `--host` flag actually exposes dev server
+- [x] `frontend/.env` — documented LAN switchover (uncomment IP line, restart dev server)
+
+### Portfolio Value clarification
+- Analysis: Backend `portfolioValue = cashBalance + totalInvested` is **mathematically correct**.
+  When you buy $10k of stock: cash drops $10k, holdings cost-basis rises $10k → net = $100k (unchanged).
+  Portfolio value only changes when market prices move. Since Finnhub live prices are not yet injected
+  into `GET /portfolio/holdings`, P&L stays $0 — this is **honest, not a bug**.
+- Resolution: Dashboard KPI label changed from "Today's Change" (misleading) to "Total Invested"
+  which shows the actual invested capital — a more useful metric without a live price feed.
+
+### Cleanup
+- [x] All `INITIAL_BALANCE` usages removed from page components (constants.js still exports it for reference)
+- [x] All hardcoded mock arrays removed from Dashboard and Portfolio (M15B)
+- [x] Dead "In development" chips removed
+- [x] Static placeholder captions removed
+
+**Test**:
+1. Load `/news` → 9 skeleton cards → real articles appear → clicking opens article in new tab
+2. Click "Forex" category → news re-fetches; "General" tab restores
+3. Open app from LAN device after IP swap in `.env` and dev server restart → login works
+4. Dashboard "Total Invested" KPI shows cost basis; "Portfolio Value" = cash + invested
+5. Backend restart → `✓ Server running on 0.0.0.0:5001` in logs

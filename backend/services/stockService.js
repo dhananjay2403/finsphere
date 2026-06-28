@@ -277,4 +277,34 @@ const getCandles = async (symbol, resolution = 'D', from, to) => {
 };
 
 
-module.exports = { getQuote, getProfile, searchSymbols, getNews, getCandles };
+
+/**
+ * Get general market news (no symbol required).
+ * Uses Finnhub's /news endpoint with category="general".
+ *
+ * @param {string} [category] — "general" | "forex" | "crypto" | "merger" (default "general")
+ * @returns {Array<{ id, headline, source, url, summary, datetime, image, category }>}
+ */
+const getMarketNews = async (category = 'general') => {
+
+  const data = await callFinnhub('/news', { category });
+
+  if (!Array.isArray(data)) return [];
+
+  return data
+    .filter((article) => article.headline && article.url)    // Skip empty articles
+    .slice(0, 30)                                             // Cap at 30 articles
+    .map((article) => ({
+      id:       article.id,
+      headline: article.headline,
+      source:   article.source,
+      url:      article.url,
+      summary:  article.summary   || '',
+      datetime: article.datetime,  // Unix timestamp (seconds)
+      image:    article.image      || null,
+      category: article.category  || category,
+    }));
+};
+
+
+module.exports = { getQuote, getProfile, searchSymbols, getNews, getCandles, getMarketNews };

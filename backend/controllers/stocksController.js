@@ -4,6 +4,7 @@ const {
   searchSymbols,
   getNews,
   getCandles,
+  getMarketNews,
 } = require('../services/stockService');
 
 
@@ -91,4 +92,20 @@ const history = async (req, res, next) => {
 };
 
 
-module.exports = { quote, profile, search, news, history };
+// ---------------------------------------------------------------------------
+// @desc    Get general market news (no symbol needed)
+// @route   GET /api/stocks/market-news?category=general
+// @access  Protected
+// ---------------------------------------------------------------------------
+const marketNews = async (req, res, next) => {
+  try {
+    const category = req.query.category || 'general';
+    const data = await getMarketNews(category);
+    return res.status(200).json({ success: true, count: data.length, data });
+  } catch (err) {
+    next(err);
+  }
+};
+
+
+module.exports = { quote, profile, search, news, history, marketNews };

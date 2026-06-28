@@ -77,6 +77,18 @@ const stockService = {
     const response = await api.get(`/stocks/news/${symbol}`);
     return response.data.data;
   },
+
+  /**
+   * Get general market news (no symbol required).
+   * Calls: GET /api/stocks/market-news?category=<category>
+   *
+   * @param {string} [category] — "general" | "forex" | "crypto" | "merger"
+   * @returns {Promise<Array<{ id, headline, source, url, summary, datetime, image, category }>>}
+   */
+  getMarketNews: async (category = 'general') => {
+    const response = await api.get('/stocks/market-news', { params: { category } });
+    return response.data.data;
+  },
 };
 
 

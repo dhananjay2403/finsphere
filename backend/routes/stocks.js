@@ -2,7 +2,7 @@ const express = require('express');
 const { param, query } = require('express-validator');
 const { protect } = require('../middleware/authMiddleware');
 const validate = require('../middleware/validate');
-const { quote, profile, search, news, history } = require('../controllers/stocksController');
+const { quote, profile, search, news, history, marketNews } = require('../controllers/stocksController');
 
 const router = express.Router();
 
@@ -41,6 +41,9 @@ router.get('/news/:symbol', protect, symbolParam, validate, news);
 
 // GET /api/stocks/history/:symbol?resolution=D&from=&to=
 router.get('/history/:symbol', protect, symbolParam, validate, history);
+
+// GET /api/stocks/market-news?category=general
+router.get('/market-news', protect, marketNews);
 
 
 module.exports = router;

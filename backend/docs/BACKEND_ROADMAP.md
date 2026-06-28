@@ -244,3 +244,48 @@ is integrated in Milestone 12 (Stock Data Integration).
 4. Click Sell on a held stock → success / "Insufficient shares" error handled
 5. Add stock to Watchlist → persists on page refresh → Remove works
 6. Refresh page → watchlist, cash balance, recent orders all reload from backend
+
+---
+
+## Milestone 15B — Dashboard & Portfolio Frontend Integration ✅
+
+**Status**: Complete
+
+### New files
+- [x] `frontend/src/services/portfolioService.js` — thin wrappers for all 3 `/api/portfolio/*` endpoints (`getHoldings`, `getSummary`, `getCash`)
+
+### Dashboard integration (`frontend/src/pages/Dashboard.jsx`)
+- [x] **Portfolio Value KPI** — `GET /api/portfolio/summary` → `portfolioValue`
+- [x] **Total Gain / Loss KPI** — `summary.totalReturn` + `summary.totalReturnPct`; badge colour driven by sign
+- [x] **Total Invested KPI** — `summary.totalInvested` + holdings count (replaces "Today's Change" placeholder)
+- [x] **Total Transactions KPI** — `GET /api/trades/history?limit=100` → `total count`
+- [x] **Portfolio Performance chart** — derived from real trade history: cumulative portfolio value plotted per trade; empty state when no trades exist
+- [x] **Allocation panel** — top 3 holdings by `totalInvested` weight; empty state when no holdings
+- [x] **Portfolio Health Score** — computed client-side from 4 real metrics: Diversification (holding count), Cash Management (cash ratio vs 30% ideal), Activity (trade count), Concentration (inverse max-weight)
+- [x] **Investment Challenge** — driven by unique trading days in trade history; "Active trading days" / "Total trades" / "Completion"
+- [x] **Recent Transactions** — `GET /api/trades/history?limit=5` → colour-coded buy/sell rows; empty state when no trades
+- [x] **Skeleton loaders** — all 4 KPI cards, chart, allocation panel, health score, challenge, and recent transactions have loading skeletons
+- [x] All fetches run in parallel with `Promise.allSettled` — one section failing does not break others
+- [x] Original responsive layout preserved — no UI redesign
+
+### Portfolio integration (`frontend/src/pages/Portfolio.jsx`)
+- [x] **Holdings table** — `GET /api/portfolio/holdings` → symbol, name, qty, avg cost, invested columns; "In development" chip removed; empty state when no holdings
+- [x] **Cash Available** — `GET /api/portfolio/summary` → `cashBalance`
+- [x] **P&L Summary** — `totalInvested`, `portfolioValue`, `totalReturn` + `totalReturnPct`; Skeletons resolve to real values
+- [x] **Portfolio Breakdown stacked bar** — computed from real holdings by `totalInvested` weight; up to 6 named + "Other" bucket
+- [x] **Largest Position card** — replaces hard-coded "Top Performer AAPL +12.4%" with real largest holding by invested amount
+- [x] **Allocation donut (PieChart)** — populated from real holdings; empty state when no holdings
+- [x] **Skeleton loaders** — holdings table, all right-column cards, donut chart
+- [x] `Promise.allSettled` — holdings and summary fetched in parallel; each section degrades independently
+- [x] Original responsive layout preserved — no UI redesign
+
+**Test**:
+1. Load `/dashboard` → all 4 KPI cards show live data; skeletons resolve
+2. Execute a trade on Trade page → return to Dashboard → Portfolio Value, Gain/Loss, and Recent Transactions update
+3. Dashboard allocation panel shows real ticker symbols (not hard-coded sectors)
+4. Health score reflects actual diversification: buying 1 stock → low Diversification score; 5+ stocks → higher
+5. Challenge counter increments each unique day a trade is placed
+6. Load `/portfolio` → Holdings table shows real positions; "In development" chip gone
+7. P&L Summary rows show real numbers from backend (not Skeletons)
+8. Portfolio Breakdown bar and Allocation donut reflect real position weights
+9. Largest Position card shows actual top holding, not hard-coded AAPL

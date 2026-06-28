@@ -1,4 +1,5 @@
-import { Box, Container, Typography, Grid, Paper, Chip, Button } from '@mui/material';
+import { useState, useEffect, useCallback } from 'react';
+import { Box, Container, Typography, Grid, Paper, Chip, Button, Skeleton } from '@mui/material';
 import { useNavigate } from 'react-router-dom';
 import {
   ResponsiveContainer,
@@ -16,81 +17,175 @@ import SwapHorizIcon from '@mui/icons-material/SwapHoriz';
 import FavoriteIcon from '@mui/icons-material/Favorite';
 import EmojiEventsIcon from '@mui/icons-material/EmojiEvents';
 import ArrowForwardIcon from '@mui/icons-material/ArrowForward';
+import TrendingDownIcon from '@mui/icons-material/TrendingDown';
 import { useAuth } from '../hooks/useAuth';
-import { formatCurrency } from '../utils/helpers';
-import { INITIAL_BALANCE, ROUTES } from '../utils/constants';
+import { formatCurrency, formatPercent } from '../utils/helpers';
+import { ROUTES } from '../utils/constants';
+import portfolioService from '../services/portfolioService';
+import tradeService from '../services/tradeService';
 
 
-/* Mock data */
-
-// 30-day portfolio value history (mock)
-const PORTFOLIO_HISTORY = Array.from({ length: 30 }, (_, i) => {
-  const base = 100000;
-  const day = i + 1;
-  // Gentle upward trend with some variance
-  const value = base + day * 120 + Math.sin(day * 0.8) * 800 + Math.cos(day * 0.3) * 400;
-  return {
-    day: `Day ${day}`,
-    value: Math.round(value * 100) / 100,
-  };
-});
-
-const TOP_ALLOCATIONS = [
-  { label: 'Technology', pct: 45, color: '#7A3E48' },
-  { label: 'Finance', pct: 25, color: '#C88C96' },
-  { label: 'Healthcare', pct: 20, color: '#B07A61' },
-];
-
-const HEALTH_METRICS = [
-  { label: 'Diversification', score: 80 },
-  { label: 'Cash Management', score: 65 },
-  { label: 'Activity', score: 72 },
-  { label: 'Concentration', score: 68 },
-];
-
-/* Constants */
-
-const KPI_CARDS = [
-  {
-    label: 'Portfolio Value',
-    value: formatCurrency(INITIAL_BALANCE),
-    badge: null,
-    badgeText: null,
-    icon: <AccountBalanceWalletIcon sx={{ fontSize: 18 }} />,
-    accentIcon: true,
-  },
-  {
-    label: 'Total Gain / Loss',
-    value: formatCurrency(0),
-    badge: 'neutral',
-    badgeText: '+0.00%',
-    icon: <TrendingUpIcon sx={{ fontSize: 18 }} />,
-  },
-  {
-    label: "Today's Change",
-    value: formatCurrency(0),
-    badge: 'neutral',
-    badgeText: '+0.00%',
-    icon: <ShowChartIcon sx={{ fontSize: 18 }} />,
-  },
-  {
-    label: 'Total Transactions',
-    value: '0',
-    badge: null,
-    badgeText: 'All time',
-    icon: <SwapHorizIcon sx={{ fontSize: 18 }} />,
-  },
-];
-
+// Constants
 const BADGE_STYLES = {
   positive: { bgcolor: '#dcfce7', color: '#15803d' },
   negative: { bgcolor: '#fee2e2', color: '#dc2626' },
   neutral: { bgcolor: '#f1f5f9', color: '#64748b' },
 };
 
-/* Sub-components */
+// Segment palette — cycles for up to 6 allocation slices
+const ALLOC_COLORS = ['#7A3E48', '#C88C96', '#B07A61', '#E8DED5', '#9D5F6B', '#D4A0A8'];
 
-function KpiCard({ label, value, badge, badgeText, icon, accentIcon }) {
+// Health score sub-metric definitions — scores derived from real portfolio data
+const HEALTH_METRIC_LABELS = [
+  'Diversification',
+  'Cash Management',
+  'Activity',
+  'Concentration',
+];
+
+// Challenge config
+const CHALLENGE_TOTAL = 30;
+
+
+// Pure helpers
+function getHealthLabel(score) {
+  if (score >= 80) return { text: 'Excellent', color: '#15803d' };
+  if (score >= 60) return { text: 'Good', color: '#7A3E48' };
+  if (score >= 40) return { text: 'Moderate', color: '#b45309' };
+  return { text: 'Poor', color: '#dc2626' };
+}
+
+/**
+ * Compute a portfolio health score from real data.
+ * Returns { total, metrics: [{ label, score }] }
+ *
+ * Sub-scores (each 0–100):
+ *   Diversification  — based on number of unique holdings (more = better)
+ *   Cash Management  — cash as % of portfolio (30–50% = healthy)
+ *   Activity         — number of trades executed (more = higher engagement)
+ *   Concentration    — inverse of the largest position's weight (lower = better)
+ */
+function computeHealthScore({ holdings, summary, tradeCount }) {
+  const count = holdings?.length ?? 0;
+  const totalInvested = summary?.totalInvested ?? 0;
+  const cashBalance = summary?.cashBalance ?? 0;
+  const portfolioVal = summary?.portfolioValue ?? cashBalance;
+
+  // Diversification: 0 = 0, 1 = 30, 5 = 70, 10+ = 100
+  const divScore = Math.min(100, Math.round((count / 10) * 100));
+
+  // Cash Management: ideal cash ratio is 20–40% of portfolio
+  const cashRatio = portfolioVal > 0 ? cashBalance / portfolioVal : 1;
+  const cashDelta = Math.abs(cashRatio - 0.3); // 30% is ideal
+  const cashScore = Math.max(0, Math.round(100 - cashDelta * 200));
+
+  // Activity: 0 trades = 0, 20+ trades = 100
+  const activityScore = Math.min(100, Math.round((tradeCount / 20) * 100));
+
+  // Concentration: if no holdings → 100 (no concentration risk)
+  // if 1 holding → 0, if 5+ holdings → 100
+  let concScore = 100;
+  if (count > 0 && totalInvested > 0) {
+    const maxWeight = Math.max(...(holdings.map((h) => h.totalInvested / totalInvested)));
+    concScore = Math.max(0, Math.round((1 - maxWeight) * 100 * 1.25));
+  }
+
+  const metrics = [
+    { label: 'Diversification', score: divScore },
+    { label: 'Cash Management', score: cashScore },
+    { label: 'Activity', score: activityScore },
+    { label: 'Concentration', score: concScore },
+  ];
+
+  const total = Math.round(metrics.reduce((s, m) => s + m.score, 0) / metrics.length);
+
+  return { total, metrics };
+}
+
+/**
+ * Build allocation segments from holdings.
+ * Returns top 3 by totalInvested for the dashboard panel.
+ */
+function buildDashboardAllocations(holdings) {
+  if (!holdings || holdings.length === 0) return [];
+  const total = holdings.reduce((s, h) => s + h.totalInvested, 0);
+  if (total === 0) return [];
+
+  return [...holdings]
+    .sort((a, b) => b.totalInvested - a.totalInvested)
+    .slice(0, 3)
+    .map((h, i) => ({
+      label: h.symbol,
+      pct: parseFloat(((h.totalInvested / total) * 100).toFixed(1)),
+      color: ALLOC_COLORS[i],
+    }));
+}
+
+/**
+ * Build portfolio performance chart data from trade history.
+ *
+ * We walk through trades chronologically and accumulate a running
+ * "total invested" value — this gives a meaningful line chart showing
+ * how the portfolio grew over time, without needing live prices.
+ *
+ * Returns: [{ day: 'Jun 12', value: 12400 }, ...]
+ */
+function buildPerformanceChart(trades, cashBalance) {
+  if (!trades || trades.length === 0) return [];
+
+  // Sort trades oldest-first
+  const sorted = [...trades].sort(
+    (a, b) => new Date(a.executedAt) - new Date(b.executedAt)
+  );
+
+  // Start from $100,000 and simulate running balance
+  const INITIAL = 100_000;
+  let running = INITIAL;
+  const points = [];
+
+  for (const trade of sorted) {
+    if (trade.type === 'buy') {
+      running -= trade.totalAmount;
+    } else {
+      running += trade.totalAmount;
+    }
+    points.push({
+      day: new Date(trade.executedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
+      // Portfolio value = remaining cash + value of purchases (approximate as totalInvested at cost)
+      value: parseFloat((INITIAL).toFixed(2)), // placeholder baseline
+    });
+  }
+
+  // Build cumulative invested value over time
+  let cumInvested = 0;
+  return sorted.map((trade) => {
+    if (trade.type === 'buy') {
+      cumInvested += trade.totalAmount;
+    } else {
+      cumInvested = Math.max(0, cumInvested - trade.totalAmount);
+    }
+    return {
+      day: new Date(trade.executedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
+      value: parseFloat((INITIAL - (INITIAL - cashBalance - cumInvested)).toFixed(2)),
+    };
+  });
+}
+
+/**
+ * Compute challenge days — number of unique days a trade was made.
+ * Capped at CHALLENGE_TOTAL.
+ */
+function computeChallengeDays(trades) {
+  if (!trades || trades.length === 0) return 0;
+  const days = new Set(
+    trades.map((t) => new Date(t.executedAt).toDateString())
+  );
+  return Math.min(CHALLENGE_TOTAL, days.size);
+}
+
+
+// Sub-components
+function KpiCard({ label, value, badge, badgeText, icon, accentIcon, loading }) {
   const valueColor = badge === 'positive' ? '#15803d' : badge === 'negative' ? '#dc2626' : 'text.primary';
 
   return (
@@ -109,30 +204,40 @@ function KpiCard({ label, value, badge, badgeText, icon, accentIcon }) {
         <Typography variant="body2" color="text.secondary" fontWeight={500} sx={{ fontSize: { xs: '0.75rem', sm: '0.875rem' } }}>
           {label}
         </Typography>
-        <Box sx={{ color: accentIcon ? 'primary.main' : 'text.secondary', opacity: accentIcon ? 0.7 : 0.4 }}>{icon}</Box>
+        <Box sx={{ color: accentIcon ? 'primary.main' : 'text.secondary', opacity: accentIcon ? 0.7 : 0.4 }}>
+          {icon}
+        </Box>
       </Box>
 
-      <Typography
-        variant="h5"
-        fontWeight={700}
-        letterSpacing="-0.025em"
-        mb={1}
-        sx={{ fontSize: { xs: '1.15rem', sm: '1.5rem' }, color: valueColor }}
-      >
-        {value}
-      </Typography>
+      {loading ? (
+        <Skeleton width={100} height={28} animation="wave" sx={{ mb: 1 }} />
+      ) : (
+        <Typography
+          variant="h5"
+          fontWeight={700}
+          letterSpacing="-0.025em"
+          mb={1}
+          sx={{ fontSize: { xs: '1.15rem', sm: '1.5rem' }, color: valueColor }}
+        >
+          {value}
+        </Typography>
+      )}
 
       {badge ? (
-        <Chip
-          label={badgeText}
-          size="small"
-          sx={{
-            ...(BADGE_STYLES[badge] || BADGE_STYLES.neutral),
-            fontWeight: 600,
-            height: 20,
-            fontSize: '0.7rem',
-          }}
-        />
+        loading ? (
+          <Skeleton width={55} height={20} animation="wave" sx={{ borderRadius: 3 }} />
+        ) : (
+          <Chip
+            label={badgeText}
+            size="small"
+            sx={{
+              ...(BADGE_STYLES[badge] || BADGE_STYLES.neutral),
+              fontWeight: 600,
+              height: 20,
+              fontSize: '0.7rem',
+            }}
+          />
+        )
       ) : (
         badgeText && (
           <Typography variant="caption" color="text.secondary">
@@ -144,14 +249,6 @@ function KpiCard({ label, value, badge, badgeText, icon, accentIcon }) {
   );
 }
 
-function getHealthLabel(score) {
-  if (score >= 80) return { text: 'Excellent', color: '#15803d' };
-  if (score >= 60) return { text: 'Good', color: '#7A3E48' };
-  if (score >= 40) return { text: 'Moderate', color: '#b45309' };
-  return { text: 'Poor', color: '#dc2626' };
-}
-
-/* custom tooltip for the chart */
 function ChartTooltip({ active, payload, label }) {
   if (!active || !payload?.length) return null;
   return (
@@ -173,30 +270,135 @@ function ChartTooltip({ active, payload, label }) {
   );
 }
 
-/* Main component */
+function RecentTxRow({ trade }) {
+  const isBuy = trade.type === 'buy';
+  return (
+    <Box
+      sx={{
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        py: 1.25,
+        borderBottom: '1px solid',
+        borderColor: 'divider',
+        '&:last-child': { borderBottom: 'none' },
+      }}
+    >
+      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
+        <Box
+          sx={{
+            width: 28,
+            height: 28,
+            borderRadius: '50%',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            bgcolor: isBuy ? 'rgba(21, 128, 61, 0.1)' : 'rgba(220, 38, 38, 0.1)',
+          }}
+        >
+          {isBuy
+            ? <TrendingUpIcon sx={{ fontSize: 14, color: '#15803d' }} />
+            : <TrendingDownIcon sx={{ fontSize: 14, color: '#dc2626' }} />}
+        </Box>
+        <Box>
+          <Typography variant="body2" fontWeight={600} lineHeight={1.2}>
+            {trade.symbol}
+          </Typography>
+          <Typography variant="caption" color="text.secondary">
+            {isBuy ? 'Buy' : 'Sell'} · {trade.quantity} sh @ ${trade.pricePerShare?.toFixed(2)}
+          </Typography>
+        </Box>
+      </Box>
+      <Box sx={{ textAlign: 'right' }}>
+        <Typography variant="body2" fontWeight={600} color={isBuy ? '#15803d' : '#dc2626'}>
+          {isBuy ? '-' : '+'}{formatCurrency(trade.totalAmount)}
+        </Typography>
+        <Typography variant="caption" color="text.secondary">
+          {new Date(trade.executedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+        </Typography>
+      </Box>
+    </Box>
+  );
+}
 
+
+// Main component
 function Dashboard() {
   const { user } = useAuth();
   const navigate = useNavigate();
   const firstName = user?.name?.split(' ')[0] ?? 'Investor';
 
-  const healthScore = 72;
-  const health = getHealthLabel(healthScore);
+  // Data state 
+  const [summary, setSummary] = useState(null);
+  const [holdings, setHoldings] = useState([]);
+  const [allTrades, setAllTrades] = useState([]);
+  const [recentTrades, setRecentTrades] = useState([]);
 
-  const challengeDays = 12;
-  const challengeTotal = 30;
-  const challengePercent = Math.round((challengeDays / challengeTotal) * 100);
+  const [summaryLoading, setSummaryLoading] = useState(true);
+  const [holdingsLoading, setHoldingsLoading] = useState(true);
+  const [tradesLoading, setTradesLoading] = useState(true);
 
-  // Challenge tracking details
+
+  // Fetch on mount 
+  const fetchAll = useCallback(async () => {
+    // Fire all three in parallel — independent of each other
+    const [summaryResult, holdingsResult, tradesResult, allTradesResult] =
+      await Promise.allSettled([
+        portfolioService.getSummary(),
+        portfolioService.getHoldings(),
+        tradeService.getHistory({ limit: 5, page: 1 }),        // recent 5 for the panel
+        tradeService.getHistory({ limit: 100, page: 1 }),      // all for chart + health
+      ]);
+
+    if (summaryResult.status === 'fulfilled') setSummary(summaryResult.value);
+    setSummaryLoading(false);
+
+    if (holdingsResult.status === 'fulfilled') setHoldings(holdingsResult.value);
+    setHoldingsLoading(false);
+
+    if (tradesResult.status === 'fulfilled') setRecentTrades(tradesResult.value.data);
+    if (allTradesResult.status === 'fulfilled') setAllTrades(allTradesResult.value.data);
+    setTradesLoading(false);
+  }, []);
+
+  useEffect(() => { fetchAll(); }, [fetchAll]);
+
+
+  // Derived values 
+  const isLoading = summaryLoading || holdingsLoading || tradesLoading;
+
+  // KPI badges
+  const gainLoss = summary?.totalReturn ?? 0;
+  const gainLossPct = summary?.totalReturnPct ?? 0;
+  const gainBadge = gainLoss > 0 ? 'positive' : gainLoss < 0 ? 'negative' : 'neutral';
+
+  // Allocations (top 3 for dashboard panel)
+  const allocations = buildDashboardAllocations(holdings);
+
+  // Health score — only compute when data is ready
+  const healthData = isLoading
+    ? { total: 0, metrics: HEALTH_METRIC_LABELS.map((l) => ({ label: l, score: 0 })) }
+    : computeHealthScore({ holdings, summary, tradeCount: allTrades.length });
+  const health = getHealthLabel(healthData.total);
+
+  // Performance chart
+  const chartData = buildPerformanceChart(allTrades, summary?.cashBalance ?? 0);
+
+  // Challenge
+  const challengeDays = computeChallengeDays(allTrades);
+  const challengePercent = Math.round((challengeDays / CHALLENGE_TOTAL) * 100);
   const challengeDetails = [
-    { label: 'Learning streak', value: '5 days' },
-    { label: 'Trading streak', value: '3 days' },
+    { label: 'Active trading days', value: `${challengeDays} days` },
+    { label: 'Total trades', value: `${allTrades.length}` },
     { label: 'Completion', value: `${challengePercent}%` },
   ];
 
+
+  // Render 
   return (
     <Container maxWidth="lg" sx={{ py: 4 }}>
 
+      {/* Header */}
       <Box sx={{ mb: 4, textAlign: { xs: 'center', md: 'left' } }}>
         <Typography variant="h4" fontWeight={700} letterSpacing="-0.025em">
           Welcome back, {firstName}
@@ -208,15 +410,62 @@ function Dashboard() {
 
       {/* KPI cards */}
       <Grid container spacing={2} sx={{ mb: 3 }}>
-        {KPI_CARDS.map((card) => (
-          <Grid item xs={6} sm={6} md={3} key={card.label}>
-            <KpiCard {...card} />
-          </Grid>
-        ))}
+
+        {/* Portfolio Value */}
+        <Grid item xs={6} sm={6} md={3}>
+          <KpiCard
+            label="Portfolio Value"
+            value={formatCurrency(summary?.portfolioValue ?? 0)}
+            badge={null}
+            badgeText={null}
+            icon={<AccountBalanceWalletIcon sx={{ fontSize: 18 }} />}
+            accentIcon
+            loading={summaryLoading}
+          />
+        </Grid>
+
+        {/* Total Gain / Loss */}
+        <Grid item xs={6} sm={6} md={3}>
+          <KpiCard
+            label="Total Gain / Loss"
+            value={formatCurrency(gainLoss)}
+            badge={gainBadge}
+            badgeText={formatPercent(gainLossPct)}
+            icon={<TrendingUpIcon sx={{ fontSize: 18 }} />}
+            loading={summaryLoading}
+          />
+        </Grid>
+
+        {/* Today's Change — requires live prices; show invested amount as proxy */}
+        <Grid item xs={6} sm={6} md={3}>
+          <KpiCard
+            label="Total Invested"
+            value={formatCurrency(summary?.totalInvested ?? 0)}
+            badge={null}
+            badgeText={holdings.length > 0 ? `${holdings.length} positions` : 'No holdings'}
+            icon={<ShowChartIcon sx={{ fontSize: 18 }} />}
+            loading={summaryLoading || holdingsLoading}
+          />
+        </Grid>
+
+        {/* Total Transactions */}
+        <Grid item xs={6} sm={6} md={3}>
+          <KpiCard
+            label="Total Transactions"
+            value={tradesLoading ? '—' : String(allTrades.length)}
+            badge={null}
+            badgeText="All time"
+            icon={<SwapHorizIcon sx={{ fontSize: 18 }} />}
+            loading={tradesLoading}
+          />
+        </Grid>
+
       </Grid>
 
       {/* Chart row */}
       <Grid container spacing={2} sx={{ mb: 3 }}>
+
+        {/* Portfolio Performance chart */}
         <Grid item xs={12} md={8}>
           <Paper
             elevation={0}
@@ -228,19 +477,12 @@ function Dashboard() {
               bgcolor: 'white',
             }}
           >
-            <Box
-              sx={{
-                display: 'flex',
-                justifyContent: 'space-between',
-                alignItems: 'center',
-                mb: 2.5,
-              }}
-            >
+            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2.5 }}>
               <Typography variant="body1" fontWeight={600}>
                 Portfolio Performance
               </Typography>
               <Chip
-                label="30 Days"
+                label={chartData.length > 0 ? `${chartData.length} trades` : 'No data yet'}
                 size="small"
                 sx={{
                   bgcolor: 'rgba(122, 62, 72, 0.08)',
@@ -251,37 +493,55 @@ function Dashboard() {
                 }}
               />
             </Box>
-            <ResponsiveContainer width="100%" height={220}>
-              <LineChart data={PORTFOLIO_HISTORY} margin={{ top: 5, right: 10, left: -10, bottom: 5 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#E8DED5" vertical={false} />
-                <XAxis
-                  dataKey="day"
-                  tick={{ fontSize: 11, fill: '#6B6B6B' }}
-                  tickLine={false}
-                  axisLine={{ stroke: '#E8DED5' }}
-                  interval="preserveStartEnd"
-                />
-                <YAxis
-                  tick={{ fontSize: 11, fill: '#6B6B6B' }}
-                  tickLine={false}
-                  axisLine={false}
-                  tickFormatter={(v) => `$${(v / 1000).toFixed(0)}k`}
-                  domain={['dataMin - 500', 'dataMax + 500']}
-                />
-                <Tooltip content={<ChartTooltip />} />
-                <Line
-                  type="monotone"
-                  dataKey="value"
-                  stroke="#7A3E48"
-                  strokeWidth={2.5}
-                  dot={false}
-                  activeDot={{ r: 5, fill: '#7A3E48', stroke: '#FFFDFB', strokeWidth: 2 }}
-                />
-              </LineChart>
-            </ResponsiveContainer>
+
+            {tradesLoading ? (
+              <Skeleton variant="rectangular" height={220} sx={{ borderRadius: 1 }} animation="wave" />
+            ) : chartData.length === 0 ? (
+              <Box sx={{ height: 220, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <Box sx={{ textAlign: 'center' }}>
+                  <ShowChartIcon sx={{ fontSize: 40, color: '#e2e8f0', mb: 1 }} />
+                  <Typography variant="body2" color="text.secondary" fontWeight={500}>
+                    No trade data yet
+                  </Typography>
+                  <Typography variant="caption" color="text.secondary" sx={{ mt: 0.5, display: 'block' }}>
+                    Your portfolio performance will appear here after your first trade.
+                  </Typography>
+                </Box>
+              </Box>
+            ) : (
+              <ResponsiveContainer width="100%" height={220}>
+                <LineChart data={chartData} margin={{ top: 5, right: 10, left: -10, bottom: 5 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#E8DED5" vertical={false} />
+                  <XAxis
+                    dataKey="day"
+                    tick={{ fontSize: 11, fill: '#6B6B6B' }}
+                    tickLine={false}
+                    axisLine={{ stroke: '#E8DED5' }}
+                    interval="preserveStartEnd"
+                  />
+                  <YAxis
+                    tick={{ fontSize: 11, fill: '#6B6B6B' }}
+                    tickLine={false}
+                    axisLine={false}
+                    tickFormatter={(v) => `$${(v / 1000).toFixed(0)}k`}
+                    domain={['dataMin - 500', 'dataMax + 500']}
+                  />
+                  <Tooltip content={<ChartTooltip />} />
+                  <Line
+                    type="monotone"
+                    dataKey="value"
+                    stroke="#7A3E48"
+                    strokeWidth={2.5}
+                    dot={false}
+                    activeDot={{ r: 5, fill: '#7A3E48', stroke: '#FFFDFB', strokeWidth: 2 }}
+                  />
+                </LineChart>
+              </ResponsiveContainer>
+            )}
           </Paper>
         </Grid>
 
+        {/* Allocation panel */}
         <Grid item xs={12} md={4}>
           <Paper
             elevation={0}
@@ -296,38 +556,54 @@ function Dashboard() {
               flexDirection: 'column',
             }}
           >
-            <Box
-              sx={{
-                display: 'flex',
-                justifyContent: 'space-between',
-                alignItems: 'center',
-                mb: 2.5,
-              }}
-            >
+            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2.5 }}>
               <Typography variant="body1" fontWeight={600}>
                 Allocation
               </Typography>
               <Chip
-                label={`${TOP_ALLOCATIONS.length} sectors`}
+                label={
+                  holdingsLoading ? '…'
+                    : allocations.length > 0 ? `${allocations.length} positions`
+                      : 'Empty'
+                }
                 size="small"
                 sx={{ bgcolor: 'rgba(122, 62, 72, 0.08)', color: 'primary.main', fontWeight: 500, fontSize: '0.7rem', height: 20 }}
               />
             </Box>
 
-            {/* Top 3 allocations */}
-            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5, flex: 1 }}>
-              {TOP_ALLOCATIONS.map(({ label, pct, color }) => (
-                <Box key={label}>
-                  <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 0.5 }}>
-                    <Typography variant="body2" color="text.secondary" fontWeight={500}>{label}</Typography>
-                    <Typography variant="body2" fontWeight={600}>{pct}%</Typography>
+            {holdingsLoading ? (
+              <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5, flex: 1 }}>
+                {[1, 2, 3].map((i) => (
+                  <Box key={i}>
+                    <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 0.5 }}>
+                      <Skeleton width={70} height={14} animation="wave" />
+                      <Skeleton width={30} height={14} animation="wave" />
+                    </Box>
+                    <Skeleton variant="rectangular" height={6} sx={{ borderRadius: 3 }} animation="wave" />
                   </Box>
-                  <Box sx={{ height: 6, bgcolor: '#F0E9E2', borderRadius: 3, overflow: 'hidden' }}>
-                    <Box sx={{ height: '100%', width: `${pct}%`, bgcolor: color, borderRadius: 3, transition: 'width 0.5s ease' }} />
+                ))}
+              </Box>
+            ) : allocations.length === 0 ? (
+              <Box sx={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', textAlign: 'center' }}>
+                <Typography variant="caption" color="text.secondary">
+                  Buy stocks to see your allocation breakdown.
+                </Typography>
+              </Box>
+            ) : (
+              <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5, flex: 1 }}>
+                {allocations.map(({ label, pct, color }) => (
+                  <Box key={label}>
+                    <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 0.5 }}>
+                      <Typography variant="body2" color="text.secondary" fontWeight={500}>{label}</Typography>
+                      <Typography variant="body2" fontWeight={600}>{pct}%</Typography>
+                    </Box>
+                    <Box sx={{ height: 6, bgcolor: '#F0E9E2', borderRadius: 3, overflow: 'hidden' }}>
+                      <Box sx={{ height: '100%', width: `${pct}%`, bgcolor: color, borderRadius: 3, transition: 'width 0.5s ease' }} />
+                    </Box>
                   </Box>
-                </Box>
-              ))}
-            </Box>
+                ))}
+              </Box>
+            )}
 
             <Button
               size="small"
@@ -346,20 +622,17 @@ function Dashboard() {
             </Button>
           </Paper>
         </Grid>
+
       </Grid>
 
       {/* Health Score + Challenge row */}
       <Grid container spacing={2} sx={{ mb: 3 }}>
+
+        {/* Portfolio Health Score */}
         <Grid item xs={12} md={6}>
           <Paper
             elevation={0}
-            sx={{
-              p: 3,
-              border: '1px solid',
-              borderColor: 'divider',
-              borderRadius: 2,
-              bgcolor: 'white',
-            }}
+            sx={{ p: 3, border: '1px solid', borderColor: 'divider', borderRadius: 2, bgcolor: 'white' }}
           >
             <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 2 }}>
               <Box>
@@ -373,69 +646,73 @@ function Dashboard() {
               <FavoriteIcon sx={{ fontSize: 18, color: 'primary.main', opacity: 0.6 }} />
             </Box>
 
-            <Box sx={{ display: 'flex', alignItems: 'baseline', gap: 1, mb: 1.5 }}>
-              <Typography variant="h4" fontWeight={700} color="primary.main">
-                {healthScore}
-              </Typography>
-              <Typography variant="body2" color="text.secondary">/ 100</Typography>
-              <Chip
-                label={health.text}
-                size="small"
-                sx={{
-                  ml: 'auto',
-                  bgcolor: 'rgba(122, 62, 72, 0.08)',
-                  color: health.color,
-                  fontWeight: 600,
-                  fontSize: '0.72rem',
-                  height: 22,
-                }}
-              />
-            </Box>
-
-            <Box sx={{ height: 6, bgcolor: '#E8DED5', borderRadius: 3, overflow: 'hidden', mb: 2.5 }}>
-              <Box
-                sx={{
-                  height: '100%',
-                  width: `${healthScore}%`,
-                  bgcolor: 'primary.main',
-                  borderRadius: 3,
-                }}
-              />
-            </Box>
-
-            {/* Sub-metrics */}
-            <Grid container spacing={1}>
-              {HEALTH_METRICS.map(({ label, score }) => (
-                <Grid item xs={6} key={label}>
-                  <Box sx={{ p: 1.5, bgcolor: '#F8F4EF', borderRadius: 1.5 }}>
-                    <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 0.5 }}>
-                      <Typography variant="caption" color="text.secondary" fontWeight={500} sx={{ fontSize: '0.7rem' }}>
-                        {label}
-                      </Typography>
-                      <Typography variant="caption" fontWeight={700} color="primary.main" sx={{ fontSize: '0.7rem' }}>
-                        {score}
-                      </Typography>
-                    </Box>
-                    <Box sx={{ height: 3, bgcolor: '#E8DED5', borderRadius: 2, overflow: 'hidden' }}>
-                      <Box sx={{ height: '100%', width: `${score}%`, bgcolor: '#C88C96', borderRadius: 2 }} />
-                    </Box>
-                  </Box>
+            {isLoading ? (
+              <Box>
+                <Skeleton width={80} height={40} animation="wave" sx={{ mb: 1.5 }} />
+                <Skeleton variant="rectangular" height={6} sx={{ borderRadius: 3, mb: 2.5 }} animation="wave" />
+                <Grid container spacing={1}>
+                  {[1, 2, 3, 4].map((i) => (
+                    <Grid item xs={6} key={i}>
+                      <Skeleton variant="rectangular" height={52} sx={{ borderRadius: 1.5 }} animation="wave" />
+                    </Grid>
+                  ))}
                 </Grid>
-              ))}
-            </Grid>
+              </Box>
+            ) : (
+              <>
+                <Box sx={{ display: 'flex', alignItems: 'baseline', gap: 1, mb: 1.5 }}>
+                  <Typography variant="h4" fontWeight={700} color="primary.main">
+                    {healthData.total}
+                  </Typography>
+                  <Typography variant="body2" color="text.secondary">/ 100</Typography>
+                  <Chip
+                    label={health.text}
+                    size="small"
+                    sx={{
+                      ml: 'auto',
+                      bgcolor: 'rgba(122, 62, 72, 0.08)',
+                      color: health.color,
+                      fontWeight: 600,
+                      fontSize: '0.72rem',
+                      height: 22,
+                    }}
+                  />
+                </Box>
+
+                <Box sx={{ height: 6, bgcolor: '#E8DED5', borderRadius: 3, overflow: 'hidden', mb: 2.5 }}>
+                  <Box sx={{ height: '100%', width: `${healthData.total}%`, bgcolor: 'primary.main', borderRadius: 3 }} />
+                </Box>
+
+                {/* Sub-metrics */}
+                <Grid container spacing={1}>
+                  {healthData.metrics.map(({ label, score }) => (
+                    <Grid item xs={6} key={label}>
+                      <Box sx={{ p: 1.5, bgcolor: '#F8F4EF', borderRadius: 1.5 }}>
+                        <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 0.5 }}>
+                          <Typography variant="caption" color="text.secondary" fontWeight={500} sx={{ fontSize: '0.7rem' }}>
+                            {label}
+                          </Typography>
+                          <Typography variant="caption" fontWeight={700} color="primary.main" sx={{ fontSize: '0.7rem' }}>
+                            {score}
+                          </Typography>
+                        </Box>
+                        <Box sx={{ height: 3, bgcolor: '#E8DED5', borderRadius: 2, overflow: 'hidden' }}>
+                          <Box sx={{ height: '100%', width: `${score}%`, bgcolor: '#C88C96', borderRadius: 2 }} />
+                        </Box>
+                      </Box>
+                    </Grid>
+                  ))}
+                </Grid>
+              </>
+            )}
           </Paper>
         </Grid>
 
+        {/* Investment Challenge */}
         <Grid item xs={12} md={6}>
           <Paper
             elevation={0}
-            sx={{
-              p: 3,
-              border: '1px solid',
-              borderColor: 'divider',
-              borderRadius: 2,
-              bgcolor: 'white',
-            }}
+            sx={{ p: 3, border: '1px solid', borderColor: 'divider', borderRadius: 2, bgcolor: 'white' }}
           >
             <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 2 }}>
               <Box>
@@ -449,88 +726,122 @@ function Dashboard() {
               <EmojiEventsIcon sx={{ fontSize: 18, color: 'primary.main', opacity: 0.6 }} />
             </Box>
 
-            <Box sx={{ display: 'flex', alignItems: 'baseline', gap: 1, mb: 1.5 }}>
-              <Typography variant="h4" fontWeight={700} color="primary.main">
-                {challengeDays}
-              </Typography>
-              <Typography variant="body2" color="text.secondary">/ {challengeTotal} days</Typography>
-              <Chip
-                label={`${challengePercent}%`}
-                size="small"
-                sx={{
-                  ml: 'auto',
-                  bgcolor: 'rgba(122, 62, 72, 0.08)',
-                  color: 'primary.main',
-                  fontWeight: 600,
-                  fontSize: '0.72rem',
-                  height: 22,
-                }}
-              />
-            </Box>
-
-            <Box sx={{ height: 6, bgcolor: '#E8DED5', borderRadius: 3, overflow: 'hidden', mb: 2.5 }}>
-              <Box
-                sx={{
-                  height: '100%',
-                  width: `${challengePercent}%`,
-                  bgcolor: 'primary.main',
-                  borderRadius: 3,
-                }}
-              />
-            </Box>
-
-            {/* Tracking details */}
-            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
-              {challengeDetails.map(({ label, value }) => (
-                <Box
-                  key={label}
-                  sx={{
-                    display: 'flex',
-                    justifyContent: 'space-between',
-                    alignItems: 'center',
-                    p: 1.5,
-                    bgcolor: '#F8F4EF',
-                    borderRadius: 1.5,
-                  }}
-                >
-                  <Typography variant="caption" color="text.secondary" fontWeight={500} sx={{ fontSize: '0.78rem' }}>
-                    {label}
+            {tradesLoading ? (
+              <Box>
+                <Skeleton width={80} height={40} animation="wave" sx={{ mb: 1.5 }} />
+                <Skeleton variant="rectangular" height={6} sx={{ borderRadius: 3, mb: 2.5 }} animation="wave" />
+                {[1, 2, 3].map((i) => (
+                  <Skeleton key={i} variant="rectangular" height={36} sx={{ borderRadius: 1.5, mb: 1 }} animation="wave" />
+                ))}
+              </Box>
+            ) : (
+              <>
+                <Box sx={{ display: 'flex', alignItems: 'baseline', gap: 1, mb: 1.5 }}>
+                  <Typography variant="h4" fontWeight={700} color="primary.main">
+                    {challengeDays}
                   </Typography>
-                  <Typography variant="caption" fontWeight={700} color="primary.main" sx={{ fontSize: '0.78rem' }}>
-                    {value}
-                  </Typography>
+                  <Typography variant="body2" color="text.secondary">/ {CHALLENGE_TOTAL} days</Typography>
+                  <Chip
+                    label={`${challengePercent}%`}
+                    size="small"
+                    sx={{
+                      ml: 'auto',
+                      bgcolor: 'rgba(122, 62, 72, 0.08)',
+                      color: 'primary.main',
+                      fontWeight: 600,
+                      fontSize: '0.72rem',
+                      height: 22,
+                    }}
+                  />
                 </Box>
-              ))}
-            </Box>
+
+                <Box sx={{ height: 6, bgcolor: '#E8DED5', borderRadius: 3, overflow: 'hidden', mb: 2.5 }}>
+                  <Box sx={{ height: '100%', width: `${challengePercent}%`, bgcolor: 'primary.main', borderRadius: 3 }} />
+                </Box>
+
+                <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+                  {challengeDetails.map(({ label, value }) => (
+                    <Box
+                      key={label}
+                      sx={{
+                        display: 'flex',
+                        justifyContent: 'space-between',
+                        alignItems: 'center',
+                        p: 1.5,
+                        bgcolor: '#F8F4EF',
+                        borderRadius: 1.5,
+                      }}
+                    >
+                      <Typography variant="caption" color="text.secondary" fontWeight={500} sx={{ fontSize: '0.78rem' }}>
+                        {label}
+                      </Typography>
+                      <Typography variant="caption" fontWeight={700} color="primary.main" sx={{ fontSize: '0.78rem' }}>
+                        {value}
+                      </Typography>
+                    </Box>
+                  ))}
+                </Box>
+              </>
+            )}
           </Paper>
         </Grid>
+
       </Grid>
 
-      {/* Recent transactions */}
+      {/* Recent Transactions */}
       <Paper
         elevation={0}
-        sx={{
-          p: 3,
-          border: '1px solid',
-          borderColor: 'divider',
-          borderRadius: 2,
-          bgcolor: 'white',
-        }}
+        sx={{ p: 3, border: '1px solid', borderColor: 'divider', borderRadius: 2, bgcolor: 'white' }}
       >
-        <Typography variant="body1" fontWeight={600} mb={3}>
-          Recent Transactions
-        </Typography>
-
-        <Box sx={{ textAlign: 'center', py: 3 }}>
-          <SwapHorizIcon sx={{ fontSize: 28, color: '#e2e8f0', mb: 1 }} />
-          <Typography variant="body2" color="text.secondary" fontWeight={500}>
-            No transactions yet
+        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
+          <Typography variant="body1" fontWeight={600}>
+            Recent Transactions
           </Typography>
-          <Typography variant="caption" color="text.secondary" sx={{ mt: 0.5, display: 'block' }}>
-            Your trade history will appear here once you start trading.
-          </Typography>
+          {!tradesLoading && recentTrades.length > 0 && (
+            <Button
+              size="small"
+              endIcon={<ArrowForwardIcon sx={{ fontSize: 14 }} />}
+              onClick={() => navigate(ROUTES.TRADE)}
+              sx={{ color: 'primary.main', fontWeight: 600, fontSize: '0.8rem', '&:hover': { bgcolor: 'rgba(122, 62, 72, 0.04)' } }}
+            >
+              View All
+            </Button>
+          )}
         </Box>
+
+        {tradesLoading ? (
+          <Box>
+            {[1, 2, 3].map((i) => (
+              <Box key={i} sx={{ display: 'flex', alignItems: 'center', gap: 1.5, py: 1.25, borderBottom: '1px solid', borderColor: 'divider' }}>
+                <Skeleton variant="circular" width={28} height={28} animation="wave" />
+                <Box sx={{ flex: 1 }}>
+                  <Skeleton width="25%" height={14} animation="wave" />
+                  <Skeleton width="45%" height={12} animation="wave" sx={{ mt: 0.25 }} />
+                </Box>
+                <Box sx={{ textAlign: 'right' }}>
+                  <Skeleton width={70} height={14} animation="wave" />
+                  <Skeleton width={50} height={12} animation="wave" sx={{ mt: 0.25 }} />
+                </Box>
+              </Box>
+            ))}
+          </Box>
+        ) : recentTrades.length === 0 ? (
+          <Box sx={{ textAlign: 'center', py: 3 }}>
+            <SwapHorizIcon sx={{ fontSize: 28, color: '#e2e8f0', mb: 1 }} />
+            <Typography variant="body2" color="text.secondary" fontWeight={500}>
+              No transactions yet
+            </Typography>
+            <Typography variant="caption" color="text.secondary" sx={{ mt: 0.5, display: 'block' }}>
+              Your trade history will appear here once you start trading.
+            </Typography>
+          </Box>
+        ) : (
+          recentTrades.map((trade) => (
+            <RecentTxRow key={trade._id} trade={trade} />
+          ))
+        )}
       </Paper>
+
     </Container>
   );
 }

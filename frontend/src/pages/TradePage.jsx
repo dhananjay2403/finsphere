@@ -213,6 +213,8 @@ function TradePage() {
   const [searchLoading, setSearchLoading] = useState(false);
   const [showDropdown, setShowDropdown] = useState(false);
   const debounceRef = useRef(null);
+  // Prevents the dropdown from re-opening when a selection sets the query programmatically
+  const suppressDropdownRef = useRef(false);
 
   // ── Selected stock state ─────────────────────────────────────────────────
   const [stock, setStock] = useState(null);         // quote data
@@ -299,7 +301,13 @@ function TradePage() {
       try {
         const results = await stockService.search(q);
         setSearchResults(results);
-        setShowDropdown(true);
+        // Only open the dropdown for genuine user keystrokes, not programmatic
+        // symbol assignments (e.g. after clicking a result or a watchlist item)
+        if (!suppressDropdownRef.current) {
+          setShowDropdown(true);
+        } else {
+          suppressDropdownRef.current = false; // reset for the next user keystroke
+        }
       } catch {
         setSearchResults([]);
         setShowDropdown(false);
@@ -369,6 +377,8 @@ function TradePage() {
 
   // ── Select result from dropdown ──────────────────────────────────────────
   const handleSelectStock = (result) => {
+    suppressDropdownRef.current = true; // suppress the next auto-search from re-opening dropdown
+    clearTimeout(debounceRef.current);  // cancel any in-flight debounce for the old query
     setSearchQuery(result.symbol);
     setShowDropdown(false);
     setSearchResults([]);

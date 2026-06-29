@@ -575,3 +575,77 @@ getSnapshots → calls takeSnapshot (fire-and-forget, non-fatal), returns 90-day
 ```
 feat(portfolio): live Finnhub prices for holdings/summary, portfolio snapshots for chart
 ```
+
+---
+
+## Milestone 15F — Trading UI, Stock Charts & News Experience ✅
+
+**Status**: Complete
+
+### Root Causes Resolved
+
+| Issue | Root cause | Fix |
+|---|---|---|
+| Charts show "data unavailable" for every timeframe | Finnhub `/stock/candle` returns 401/403 on the free tier (premium-only endpoint) | Replaced with `yahoo-finance2` (free, no API key, same return shape) |
+| Search dropdown stays open after selecting a stock | `setSearchQuery(result.symbol)` triggers the debounced search `useEffect` which calls `setShowDropdown(true)` 400ms later | Added `suppressDropdownRef` — suppresses the next auto-search dropdown open after a programmatic selection |
+| Broken news images leave empty card area | `onError` hid the `<img>` tag but did not show the icon fallback | Added `imgFailed` state to `NewsCard`; on error, `hasImage` becomes `false` and the `NewspaperIcon` fallback renders naturally |
+
+### Chart Fix — Full Lifecycle Trace
+
+```
+Frontend (TradePage.jsx)
+  loadChart(symbol, '1M')
+  → stockService.getHistory('AAPL', 'D', fromTs, nowTs)
+  → GET /api/stocks/history/AAPL?resolution=D&from=...&to=...
+
+Backend (stocksController.js → stockService.js)
+  → getCandles('AAPL', 'D', fromTs, toTs)
+  → callFinnhub('/stock/candle', { ... })         ← 401/403 from Finnhub
+  → throw Error('Invalid or missing Finnhub API key') ← wrong error label, real cause: plan restriction
+
+Fix:
+  → yahooFinance.chart('AAPL', { period1, period2, interval: '1d' })
+  → { symbol, resolution, status: 'ok', candles: [{ time, open, high, low, close, volume }] }
+  → Same shape as before — controller, route, and frontend unchanged
+```
+
+### Resolution Mapping
+
+| UI timeframe | Frontend resolution | Yahoo Finance interval |
+|---|---|---|
+| 1D | `'30'` | `'30m'` |
+| 1W | `'60'` | `'60m'` |
+| 1M | `'D'`  | `'1d'`  |
+| 6M | `'D'`  | `'1d'`  |
+| 1Y | `'D'`  | `'1d'`  |
+
+### New Dependency
+
+`yahoo-finance2@3.15.3` (backend-only)
+- No API key required
+- Free with no rate limits beyond Yahoo's standard throttling
+- Installation: `npm install yahoo-finance2`
+
+### Files Modified
+
+| File | Change |
+|---|---|
+| `backend/services/stockService.js` | `getCandles` replaced with `yahoo-finance2` implementation; same function signature and return shape |
+| `frontend/src/pages/TradePage.jsx` | `suppressDropdownRef` + `clearTimeout` in `handleSelectStock`; dropdown check in debounced effect |
+| `frontend/src/pages/News.jsx` | `imgFailed` state in `NewsCard`; icon fallback shown on image error |
+
+### Verified
+
+```
+✓ GET /api/stocks/history/AAPL?resolution=D&from=...  → 19 daily candles (1M)
+✓ GET /api/stocks/history/AAPL?resolution=30&from=... → 9 intraday candles (1D)
+✓ GET /api/stocks/history/MSFT?resolution=D&from=...  → 250 daily candles (1Y)
+✓ All five timeframes (1D/1W/1M/6M/1Y) return real data
+✓ Quotes, profile, search, news still use Finnhub (unchanged)
+```
+
+### Commit Message
+
+```
+feat(charts): replace Finnhub candles (premium) with yahoo-finance2; fix dropdown, news images
+```

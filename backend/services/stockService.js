@@ -1,4 +1,7 @@
 const axios = require('axios');
+// yahoo-finance2 v3: default export is the class — must instantiate before use
+const YahooFinanceClass = require('yahoo-finance2').default;
+const yahooFinance = new YahooFinanceClass();
 
 // ---------------------------------------------------------------------------
 // Finnhub Stock Data Service
@@ -230,50 +233,96 @@ const getNews = async (symbol) => {
 /**
  * Get historical OHLCV candle data for charting.
  *
+ * Finnhub's /stock/candle endpoint requires a premium plan and returns 401
+ * on the free tier.  This implementation uses Yahoo Finance (via the
+ * yahoo-finance2 package) which is free, requires no API key, and returns
+ * data in the same normalised shape that the rest of the app expects.
+ *
+ * Resolution mapping (Finnhub → Yahoo Finance):
+ *   '1'  → '1m'   '5'  → '5m'   '15' → '15m'
+ *   '30' → '30m'  '60' → '60m'
+ *   'D'  → '1d'   'W'  → '1wk'  'M'  → '1mo'
+ *
  * @param {string} symbol
- * @param {string} resolution — "1" | "5" | "15" | "30" | "60" | "D" | "W" | "M"
+ * @param {string} resolution — Finnhub-style resolution string
  * @param {number} from — Unix timestamp (seconds)
  * @param {number} to   — Unix timestamp (seconds)
- * @returns {{ symbol, resolution, candles: [{ time, open, high, low, close, volume }] }}
+ * @returns {{ symbol, resolution, status, candles: [{ time, open, high, low, close, volume }] }}
  */
 const getCandles = async (symbol, resolution = 'D', from, to) => {
 
-  const now = Math.floor(Date.now() / 1000);
+  const now   = Math.floor(Date.now() / 1000);
   const oneYearAgo = now - 365 * 24 * 60 * 60;
 
-  const toTs = to ? Number(to) : now;
+  const toTs   = to   ? Number(to)   : now;
   const fromTs = from ? Number(from) : oneYearAgo;
 
-  const data = await callFinnhub('/stock/candle', {
-    symbol: symbol.toUpperCase(),
-    resolution,
-    from: fromTs,
-    to: toTs,
-  });
-
-  // Finnhub returns { s: "no_data" } when the symbol or range is invalid
-  if (!data || data.s === 'no_data') {
-    const err = new Error(`No candle data for ${symbol.toUpperCase()} at resolution "${resolution}"`);
-    err.statusCode = 404;
-    throw err;
-  }
-
-  // Transpose Finnhub's parallel arrays into an array of candle objects
-  const candles = (data.t || []).map((time, i) => ({
-    time: time,
-    open: data.o[i],
-    high: data.h[i],
-    low: data.l[i],
-    close: data.c[i],
-    volume: data.v[i],
-  }));
-
-  return {
-    symbol: symbol.toUpperCase(),
-    resolution,
-    status: data.s,
-    candles,
+  // Finnhub resolution string → Yahoo Finance interval
+  const intervalMap = {
+    '1':  '1m',
+    '5':  '5m',
+    '15': '15m',
+    '30': '30m',
+    '60': '60m',
+    'D':  '1d',
+    'W':  '1wk',
+    'M':  '1mo',
   };
+  const interval = intervalMap[resolution] || '1d';
+
+  try {
+    const result = await yahooFinance.chart(symbol.toUpperCase(), {
+      period1:  new Date(fromTs * 1000),
+      period2:  new Date(toTs   * 1000),
+      interval,
+    }, {
+      // Suppress yahoo-finance2 validation warnings that appear for some symbols
+      validateResult: false,
+    });
+
+    const quotes = result?.quotes ?? [];
+
+    if (quotes.length === 0) {
+      const err = new Error(`No candle data for ${symbol.toUpperCase()} at resolution "${resolution}"`);
+      err.statusCode = 404;
+      throw err;
+    }
+
+    // Normalise to the same shape the rest of the codebase expects
+    const candles = quotes
+      .filter((q) => q.close !== null && q.close !== undefined)
+      .map((q) => ({
+        time:   Math.floor(new Date(q.date).getTime() / 1000), // Unix seconds
+        open:   q.open,
+        high:   q.high,
+        low:    q.low,
+        close:  q.close,
+        volume: q.volume ?? 0,
+      }));
+
+    if (candles.length === 0) {
+      const err = new Error(`No valid candle data for ${symbol.toUpperCase()}`);
+      err.statusCode = 404;
+      throw err;
+    }
+
+    return {
+      symbol:     symbol.toUpperCase(),
+      resolution,
+      status:     'ok',
+      candles,
+    };
+
+  } catch (err) {
+    // Re-throw errors we already formatted
+    if (err.statusCode) throw err;
+
+    // Yahoo Finance errors (network, unknown symbol, etc.)
+    console.error(`[stockService] getCandles failed for ${symbol}:`, err.message);
+    const fetchErr = new Error(`Chart data unavailable for ${symbol.toUpperCase()} — ${err.message}`);
+    fetchErr.statusCode = 502;
+    throw fetchErr;
+  }
 };
 
 

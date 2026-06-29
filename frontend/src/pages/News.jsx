@@ -58,7 +58,8 @@ function NewsCardSkeleton() {
 
 /** Live news card — clicking opens the article in a new tab */
 function NewsCard({ article }) {
-  const hasImage = Boolean(article.image);
+  const [imgFailed, setImgFailed] = useState(false);
+  const hasImage = Boolean(article.image) && !imgFailed;
   const date = article.datetime
     ? timeAgo(new Date(article.datetime * 1000))
     : 'Recently';
@@ -109,10 +110,7 @@ function NewsCard({ article }) {
               objectFit: 'cover',
               display: 'block',
             }}
-            onError={(e) => {
-              e.target.style.display = 'none';
-              e.target.parentElement.style.background = '#F8F4EF';
-            }}
+            onError={() => setImgFailed(true)}
           />
         ) : (
           <Box

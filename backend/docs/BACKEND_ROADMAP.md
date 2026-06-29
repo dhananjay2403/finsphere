@@ -649,3 +649,60 @@ Fix:
 ```
 feat(charts): replace Finnhub candles (premium) with yahoo-finance2; fix dropdown, news images
 ```
+
+---
+
+## Milestone 15G — Portfolio Health Audit & Production Polish ✅
+
+**Status**: Complete
+
+### Health Score Audit
+
+| Metric | Formula (before) | Issue | Formula (after) |
+|---|---|---|---|
+| **Diversification** | `min(100, (count/10) × 100)` | ✅ Sound | Unchanged |
+| **Cash Management** | `max(0, 100 - abs(cashRatio-0.3) × 200)` | ❌ A fresh account with 100% cash (cashRatio=1.0) → delta=0.7 → score=100-140 → clamped to **0** despite having no risk | Now measures `investedRatio` instead. Ideal band 20–50% invested. `count===0` → explicit 0 (not started) |
+| **Activity** | `min(100, (tradeCount/20) × 100)` | ✅ Sound | Unchanged |
+| **Concentration** | `max(0, (1 - maxWeight) × 100 × 1.25)` | ⚠️ Multiplier could exceed 100 before clamp; also asymmetric with empty-state treatment | Added `min(100, …)` ceiling; multiplier reduced to ×1.2 |
+
+**Cash Management math (fixed):**
+```
+investedRatio = totalInvested / portfolioValue
+cashDelta = |investedRatio - 0.35|    ← 35% deployed = ideal
+cashScore = max(0, 100 - cashDelta × 250)
+```
+- 35% deployed → delta=0 → 100 ✅
+- 0% deployed (fresh) → explicit 0 ✅  
+- 100% deployed → delta=0.65 → score=max(0,100-162)=0 ✅
+
+### Other Fixes
+
+| File | Fix |
+|---|---|
+| `Dashboard.jsx` | Performance chart chip label now shows "N days" when using snapshots instead of "N trades" |
+| `Portfolio.jsx` | `findTopHolder` now ranks by `currentValue` (live market value from M15E) when available, falls back to `totalInvested` only on quote failure |
+
+### Files Modified
+
+| File | Change |
+|---|---|
+| `frontend/src/pages/Dashboard.jsx` | `computeHealthScore` Cash Management fix + Concentration ceiling; chart chip label |
+| `frontend/src/pages/Portfolio.jsx` | `findTopHolder` sorts by live `currentValue` |
+
+### No Changes Needed
+
+| Area | Status |
+|---|---|
+| `formatCurrency` | ✅ Correct — uses Intl.NumberFormat, 2 decimal places, USD |
+| `formatPercent` | ✅ Correct — sign-aware, 2 decimal places |
+| Portfolio P&L Summary formatting | ✅ Correct — consistent `formatCurrency` + `formatPercent` |
+| Loading states (skeletons) | ✅ Present on all data sections |
+| Error states | ✅ Alert components shown on fetch failure |
+| Empty states | ✅ Descriptive empty-state panels on all sections |
+| KPI card responsive sizing | ✅ `xs: 6 sm: 6 md: 3` grid + responsive font sizes |
+
+### Commit Message
+
+```
+fix(dashboard): correct Cash Management health score; chart label; live price for top holder
+```

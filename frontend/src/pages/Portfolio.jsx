@@ -76,13 +76,17 @@ function buildAllocationSegments(holdings) {
 }
 
 /**
- * Find the top performer — holding with the highest totalInvested.
- * (Full P&L comparison requires live prices which are null in the backend
- *  until the stock-price feed is wired in. We display the largest position.)
+ * Find the largest position.
+ * Prefers live currentValue (populated since M15E backend enrichment).
+ * Falls back to totalInvested (cost basis) when a quote failed.
  */
 function findTopHolder(holdings) {
   if (!holdings || holdings.length === 0) return null;
-  return [...holdings].sort((a, b) => b.totalInvested - a.totalInvested)[0];
+  return [...holdings].sort((a, b) => {
+    const aVal = a.currentValue ?? a.totalInvested;
+    const bVal = b.currentValue ?? b.totalInvested;
+    return bVal - aVal;
+  })[0];
 }
 
 

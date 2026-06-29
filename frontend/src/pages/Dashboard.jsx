@@ -71,30 +71,39 @@ function computeHealthScore({ holdings, summary, tradeCount }) {
   const cashBalance = summary?.cashBalance ?? 0;
   const portfolioVal = summary?.portfolioValue ?? cashBalance;
 
-  // Diversification: 0 = 0, 1 = 30, 5 = 70, 10+ = 100
+  // Diversification: 0 holdings = 0, 10+ holdings = 100
   const divScore = Math.min(100, Math.round((count / 10) * 100));
 
-  // Cash Management: ideal cash ratio is 20–40% of portfolio
-  const cashRatio = portfolioVal > 0 ? cashBalance / portfolioVal : 1;
-  const cashDelta = Math.abs(cashRatio - 0.3); // 30% is ideal
-  const cashScore = Math.max(0, Math.round(100 - cashDelta * 200));
+  // Cash Management: measures how well deployed capital is balanced.
+  // Ideal: 20–50% of portfolio is in stocks (investedRatio = 0.2–0.5).
+  // A fresh account (all cash, nothing invested) scores 0 — it's just
+  // starting out.  A fully-deployed account (no cash reserve) also scores
+  // lower because it has no liquidity cushion.
+  // Formula: peak at investedRatio = 0.35 (midpoint of ideal band).
+  const investedRatio = portfolioVal > 0 ? totalInvested / portfolioVal : 0;
+  const cashDelta = Math.abs(investedRatio - 0.35); // 35% invested = ideal
+  const cashScore = count === 0
+    ? 0 // no holdings → not started yet, neutral-zero rather than penalised
+    : Math.max(0, Math.round(100 - cashDelta * 250));
 
   // Activity: 0 trades = 0, 20+ trades = 100
   const activityScore = Math.min(100, Math.round((tradeCount / 20) * 100));
 
-  // Concentration: if no holdings → 100 (no concentration risk)
-  // if 1 holding → 0, if 5+ holdings → 100
+  // Concentration: measures position risk.
+  // No holdings → 100 (no concentration risk yet).
+  // 1 holding at 100% weight → 0.
+  // The ×1.2 multiplier so that 5 equal positions (20% each) → 96.
   let concScore = 100;
   if (count > 0 && totalInvested > 0) {
     const maxWeight = Math.max(...(holdings.map((h) => h.totalInvested / totalInvested)));
-    concScore = Math.max(0, Math.round((1 - maxWeight) * 100 * 1.25));
+    concScore = Math.max(0, Math.min(100, Math.round((1 - maxWeight) * 100 * 1.2)));
   }
 
   const metrics = [
-    { label: 'Diversification', score: divScore },
-    { label: 'Cash Management', score: cashScore },
-    { label: 'Activity', score: activityScore },
-    { label: 'Concentration', score: concScore },
+    { label: 'Diversification',  score: divScore },
+    { label: 'Cash Management',  score: cashScore },
+    { label: 'Activity',         score: activityScore },
+    { label: 'Concentration',    score: concScore },
   ];
 
   const total = Math.round(metrics.reduce((s, m) => s + m.score, 0) / metrics.length);
@@ -481,7 +490,13 @@ function Dashboard() {
                 Portfolio Performance
               </Typography>
               <Chip
-                label={chartData.length > 0 ? `${chartData.length} trades` : 'No data yet'}
+                label={
+                  snapshots.length > 0
+                    ? `${chartData.length} day${chartData.length !== 1 ? 's' : ''}`
+                    : chartData.length > 0
+                      ? `${chartData.length} trades`
+                      : 'No data yet'
+                }
                 size="small"
                 sx={{
                   bgcolor: 'rgba(122, 62, 72, 0.08)',

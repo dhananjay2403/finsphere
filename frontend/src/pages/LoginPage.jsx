@@ -19,37 +19,90 @@ import authService from '../services/authService';
 import { ROUTES } from '../utils/constants';
 
 
+// ---------------------------------------------------------------------------
+// Demo account credentials
+// These are intentionally non-secret — the demo account is a shared account
+// visible to all visitors. No personal data is ever stored on it.
+// ---------------------------------------------------------------------------
+const DEMO_EMAIL    = 'demo@finsphere.com';
+const DEMO_PASSWORD = 'Demo@finsphere1';
+const DEMO_NAME     = 'Demo User';
+
+
 function LoginPage() {
-  const [formData, setFormData] = useState({ email: '', password: '' });
+  const [formData, setFormData]     = useState({ email: '', password: '' });
   const [showPassword, setShowPassword] = useState(false);
-  const [error, setError] = useState('');
-  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [error, setError]           = useState('');
+  const [isSubmitting, setIsSubmitting]   = useState(false);
+  const [isDemoLoading, setIsDemoLoading] = useState(false);
 
   const { login } = useAuth();
-  const navigate = useNavigate();
-  const location = useLocation();
+  const navigate  = useNavigate();
+  const location  = useLocation();
 
+  // Navigate back to the page the user originally requested,
+  // or fall back to the dashboard.
   const redirectTo = location.state?.from?.pathname || ROUTES.DASHBOARD;
 
-  const handleDemoLogin = () => {
-    const mockUser = {
-      _id: 'mock_id_123',
-      name: 'Demo User',
-      email: 'demo@finsphere.com',
-      balance: 100000,
-    };
-    login(mockUser, 'mock_jwt_token');
-    navigate(redirectTo, { replace: true });
+  // ---------------------------------------------------------------------------
+  // Demo login
+  // ---------------------------------------------------------------------------
+  // Obtains a REAL JWT for the shared demo account so the demo user works
+  // exactly like a normal user (live stock quotes, trading, watchlist, etc.)
+  //
+  // Flow:
+  //   1. Try POST /api/auth/login with demo credentials
+  //   2. If the account doesn't exist yet (409/404), auto-register it first
+  //   3. Store the real JWT → navigate to the app
+  //
+  // The demo account is shared between all visitors. Its trades and watchlist
+  // ARE saved in the database (intentional — makes the demo feel real).
+  // Sessions persist for 7 days (JWT expiry) then require re-authentication.
+  // ---------------------------------------------------------------------------
+  const handleDemoLogin = async () => {
+    setIsDemoLoading(true);
+    setError('');
+
+    try {
+      let result;
+
+      try {
+        // Attempt direct login first (account already exists)
+        result = await authService.login({ email: DEMO_EMAIL, password: DEMO_PASSWORD });
+      } catch (loginErr) {
+        // 401 = wrong password (shouldn't happen), anything else = account missing
+        // Attempt to register the demo account, then login
+        if (loginErr.response?.status !== 401) {
+          await authService.register({
+            name:     DEMO_NAME,
+            email:    DEMO_EMAIL,
+            password: DEMO_PASSWORD,
+          });
+          result = await authService.login({ email: DEMO_EMAIL, password: DEMO_PASSWORD });
+        } else {
+          throw loginErr;
+        }
+      }
+
+      login(result.user, result.token);
+      navigate(redirectTo, { replace: true });
+
+    } catch (err) {
+      setError('Demo access is temporarily unavailable. Please try again or create a free account.');
+    } finally {
+      setIsDemoLoading(false);
+    }
   };
 
-  // Auto-login bypass for developer/mobile testing using ?demo=true query param
+  // Auto-trigger demo login when the URL contains ?demo=true
+  // Useful for sharing a one-click demo link in portfolio READMEs.
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     if (params.get('demo') === 'true') {
       handleDemoLogin();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [login, navigate, redirectTo]);
+  }, []);
 
   const handleChange = (e) => {
     const { name, value } = e.target;
@@ -120,7 +173,7 @@ function LoginPage() {
             fullWidth
             value={formData.email}
             onChange={handleChange}
-            disabled={isSubmitting}
+            disabled={isSubmitting || isDemoLoading}
           />
           <TextField
             label="Password"
@@ -130,7 +183,7 @@ function LoginPage() {
             fullWidth
             value={formData.password}
             onChange={handleChange}
-            disabled={isSubmitting}
+            disabled={isSubmitting || isDemoLoading}
             InputProps={{
               endAdornment: (
                 <InputAdornment position="end">
@@ -157,7 +210,7 @@ function LoginPage() {
           variant="contained"
           fullWidth
           size="large"
-          disabled={isSubmitting}
+          disabled={isSubmitting || isDemoLoading}
           sx={{ mt: 3, py: 1.25 }}
         >
           {isSubmitting ? (
@@ -174,9 +227,14 @@ function LoginPage() {
         fullWidth
         size="large"
         onClick={handleDemoLogin}
+        disabled={isDemoLoading || isSubmitting}
         sx={{ mt: 2, py: 1.25 }}
       >
-        Explore Demo
+        {isDemoLoading ? (
+          <CircularProgress size={20} color="inherit" />
+        ) : (
+          'Explore Demo'
+        )}
       </Button>
       <Typography variant="caption" color="text.secondary" display="block" textAlign="center" sx={{ mt: 1 }}>
         Preview FinSphere without creating an account.

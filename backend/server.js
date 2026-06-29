@@ -13,8 +13,7 @@ const app = express();
 // Connect to MongoDB
 connectDB();
 
-// Global middleware
-app.use(cors());                          // Allow cross-origin requests (frontend on :5173)
+app.use(cors());                          // Allow cross-origin requests
 app.use(express.json({ limit: '10kb' })); // Parse JSON bodies — cap at 10 KB to prevent abuse
 
 if (process.env.NODE_ENV !== 'production') {

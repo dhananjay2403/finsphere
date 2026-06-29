@@ -350,3 +350,149 @@ is integrated in Milestone 12 (Stock Data Integration).
 3. Open app from LAN device after IP swap in `.env` and dev server restart → login works
 4. Dashboard "Total Invested" KPI shows cost basis; "Portfolio Value" = cash + invested
 5. Backend restart → `✓ Server running on 0.0.0.0:5001` in logs
+
+---
+
+## Milestone 15D — Production Deployment & Authentication Stability ✅
+
+**Status**: Complete
+
+### Root cause analysis
+
+#### Mobile browser auth failure
+- **Cause 1**: `ProtectedRoute.jsx` had `const DEMO_MODE = true` — the entire auth guard was bypassed unconditionally. `isAuthenticated` was never checked.
+- **Cause 2**: `LoginPage.jsx` had `handleDemoLogin()` which stored `mock_jwt_token` in localStorage. On the next page load, `AuthContext` called `authService.getProfile()` which sent this fake token to the backend and received a 401, immediately clearing the session — any navigation to a protected page would redirect to `/login`.
+- **Cause 3**: The `?demo=true` auto-login `useEffect` triggered `handleDemoLogin()` silently on mobile when someone used a URL with that query string.
+
+#### Refresh / direct URL failure
+- **Cause**: No `vercel.json` was present. Vercel serves a static file tree — navigating to `/dashboard` directly requests a file at that path which doesn't exist → Vercel 404. The React SPA never loads.
+
+#### Production API URL
+- **Cause**: `VITE_API_URL=http://localhost:5001/api` (in `.env`) is baked into the Vite bundle at build time. On a deployed Vercel frontend, all API calls resolve to `localhost` on the *user's* machine — all requests fail silently.
+
+#### CORS
+- **Cause**: `app.use(cors())` (wildcard) is permissive but not secure for production. Replaced with an explicit origin whitelist.
+
+### Changes
+
+| File | Change |
+|---|---|
+| `frontend/src/routes/ProtectedRoute.jsx` | Removed `DEMO_MODE = true` bypass; restored real `isAuthenticated` guard |
+| `frontend/src/pages/LoginPage.jsx` | Removed `handleDemoLogin`, `?demo=true` useEffect, and "Explore Demo" button |
+| `frontend/vercel.json` | NEW — SPA rewrite: all paths → `index.html` |
+| `frontend/.env.production` | NEW — `VITE_API_URL=https://finsphere-api.onrender.com/api` |
+| `render.yaml` | NEW — Render service manifest (root level) |
+| `backend/server.js` | Replaced wildcard CORS with origin whitelist; `CORS_ORIGIN` env var for production |
+| `backend/.env.example` | Added `CORS_ORIGIN` documentation |
+
+### Authentication flow (post-fix)
+
+```
+User visits /dashboard (refresh or direct URL)
+  → Vercel rewrites to index.html                     [vercel.json]
+  → React app boots, AuthContext runs useEffect
+  → localStorage.getItem('finsphere_token') found
+  → authService.getProfile() → GET /api/auth/me       [real JWT validation]
+  → 200 OK → setUser(freshUser), setToken(token)
+  → isLoading: false, isAuthenticated: true
+  → ProtectedRoute renders children                   [real guard]
+  → Dashboard renders with live data
+
+User visits /dashboard (no token / new device)
+  → Same rewrite → app boots → no token in localStorage
+  → isLoading: false, isAuthenticated: false
+  → ProtectedRoute redirects to /login with state={{ from: '/dashboard' }}
+  → User logs in → login(user, token) stores real JWT
+  → navigate('/dashboard', { replace: true })
+```
+
+### Production deployment checklist
+
+#### Vercel (frontend)
+- [ ] Connect GitHub repo → select `frontend/` as root directory
+- [ ] Build command: `npm run build`
+- [ ] Output directory: `dist`
+- [ ] Add environment variable in Vercel dashboard: `VITE_API_URL=https://finsphere-api.onrender.com/api`
+- [ ] (Alternatively, `frontend/.env.production` is committed and Vite picks it up at build time)
+- [ ] After deploy, note the Vercel URL (e.g. `https://finsphere.vercel.app`)
+
+#### Render (backend)
+- [ ] Connect GitHub repo → Render detects `render.yaml` automatically
+- [ ] In Render dashboard, set secrets: `MONGO_URI`, `JWT_SECRET`, `FINNHUB_API_KEY`
+- [ ] Set `CORS_ORIGIN=https://finsphere.vercel.app` (must match Vercel URL exactly)
+- [ ] Note the Render service URL (e.g. `https://finsphere-api.onrender.com`)
+- [ ] Update `VITE_API_URL` in Vercel environment variables to match the Render URL
+
+**Test**:
+1. Deploy both services → open Vercel URL → login with real credentials → redirect to dashboard
+2. Refresh `/dashboard` → page reloads correctly (no 404)
+3. Navigate to `/portfolio` directly → page loads (no 404)
+4. Open on mobile browser → login → protected routes accessible
+5. Check Render logs: `✓ Server running on 0.0.0.0:10000 [production]`
+6. Open browser devtools → Network tab → confirm API calls go to Render URL, not localhost
+
+---
+
+## Milestone 15D Revision — Stable Authentication & Demo Login ✅
+
+**Status**: Complete
+
+### Regressions introduced by original M15D (now fixed)
+
+| Regression | Root cause | Fix |
+|---|---|---|
+| Sign-in/Sign-up broken on mobile/LAN | `VITE_API_URL=http://localhost:5001/api` baked into bundle; `localhost` resolves to the client device, not the Mac | Replaced with Vite proxy + relative `VITE_API_URL=/api` |
+| Demo login removed | `handleDemoLogin` and "Explore Demo" button deleted | Restored with real JWT flow |
+| DEMO_MODE confusion | `DEMO_MODE = true` short-circuited real auth | Removed entirely; demo users get real JWTs |
+
+### Root fix: Vite development proxy
+
+**Problem**: Any device accessing the app over LAN could load the frontend (Vite exposed on all interfaces via `--host`) but all API calls failed because `http://localhost:5001/api` in the bundle resolves to the device's own localhost, not the server Mac.
+
+**Solution**: Vite proxy in `vite.config.js`:
+```js
+proxy: {
+  '/api': {
+    target: 'http://localhost:5001',
+    changeOrigin: true,
+  },
+},
+```
+And `VITE_API_URL=/api` in `.env`. All API requests go to Vite first, which proxies to `localhost:5001`. Since Vite runs on the Mac, `localhost` always resolves correctly regardless of the client device.
+
+### Demo login — real JWT flow
+
+The "Explore Demo" button now calls the real backend to obtain a legitimate JWT:
+
+1. `POST /api/auth/login` with `demo@finsphere.com` / `Demo@finsphere1`
+2. If 404/network-error (account missing), `POST /api/auth/register` then login
+3. Stores real JWT → navigates to dashboard
+4. Demo user can: search stocks, trade, manage watchlist, see live portfolio
+
+The demo account (`demo@finsphere.com`) was created in Atlas on first button click. Its trades and balance persist in the shared demo account. Session persists for 7 days (JWT expiry).
+
+### DEMO_MODE removed
+
+`ProtectedRoute.jsx` previously had `const DEMO_MODE = true` which bypassed all auth checks. This is now removed. All users (real and demo) are authenticated via JWT.
+
+### Changes
+
+| File | Change |
+|---|---|
+| `frontend/vite.config.js` | Added `server.proxy: { '/api': { target: 'http://localhost:5001' } }` |
+| `frontend/.env` | `VITE_API_URL=http://localhost:5001/api` → `VITE_API_URL=/api` |
+| `frontend/src/pages/LoginPage.jsx` | `handleDemoLogin` now calls real backend; async with spinner |
+| `frontend/src/routes/ProtectedRoute.jsx` | `DEMO_MODE` removed; real auth guard active for all users |
+
+### Verified
+
+```
+✓ GET  http://localhost:3000/api/health  → 200 { success: true }     [proxy works]
+✓ POST http://localhost:3000/api/auth/register → 201 { token, user } [sign-up works]
+✓ POST http://localhost:3000/api/auth/login    → 200 { token, user } [sign-in works]
+✓ POST /login (wrong password)                → 401 Invalid creds    [error handling works]
+✓ GET  http://localhost:3000/api/auth/me       → 200 { user }        [JWT validation works]
+✓ Demo account auto-registered & JWT obtained → demo user is full citizen
+```
+
+**Test on mobile**: Open `http://192.168.1.8:3000` on any LAN device → login works → protected routes work → stock search, trades, portfolio all function correctly.

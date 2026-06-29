@@ -17,6 +17,13 @@ const authService = {
     const response = await api.get('/auth/me');
     return response.data;
   },
+
+  // Resets the shared demo account to its initial state (clean trades,
+  // holdings, watchlist and $100k balance) before a new demo session starts.
+  resetDemo: async () => {
+    const response = await api.post('/demo/reset');
+    return response.data;
+  },
 };
 
 

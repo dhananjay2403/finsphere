@@ -64,8 +64,14 @@ function LoginPage() {
     setError('');
 
     try {
-      let result;
+      // ── Step 1: wipe the shared demo account so this session starts clean ──
+      // Deletes all prior trades, holdings, watchlist items and resets the
+      // cash balance to $100,000.  Runs before login so the JWT we receive
+      // reflects the freshly-reset account immediately.
+      await authService.resetDemo();
 
+      // ── Step 2: obtain a real JWT for the demo account ──
+      let result;
       try {
         // Attempt direct login first (account already exists)
         result = await authService.login({ email: DEMO_EMAIL, password: DEMO_PASSWORD });

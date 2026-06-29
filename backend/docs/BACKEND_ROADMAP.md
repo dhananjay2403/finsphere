@@ -496,3 +496,82 @@ The demo account (`demo@finsphere.com`) was created in Atlas on first button cli
 ```
 
 **Test on mobile**: Open `http://192.168.1.8:3000` on any LAN device → login works → protected routes work → stock search, trades, portfolio all function correctly.
+
+---
+
+## Milestone 15E — Trading, Live Market Data & Dashboard Accuracy ✅
+
+**Status**: Complete
+
+### Root Causes Resolved
+
+| Issue | Was | Now |
+|---|---|---|
+| Portfolio Value stuck at $100k | `currentValue = totalInvested` (hardcoded placeholder) | `currentValue = Σ(qty × livePrice)` via Finnhub |
+| Holdings show all-null prices | `currentPrice: null` hardcoded | Enriched from `stockService.getQuote()` in parallel |
+| P&L always zero | `totalReturn = currentValue - totalInvested` = 0 (same value) | Real: `totalReturn = Σ(qty × livePrice) - Σ(qty × avgCost)` |
+| Chart shows flat $100k line | Dead placeholder: `value: parseFloat((INITIAL).toFixed(2))` | Primary: real `PortfolioSnapshot` data; fallback: trade-math approximation |
+
+### Architecture
+
+**`portfolioController.js` refactored into:**
+
+```
+fetchQuotes(holdings)
+  → Promise.allSettled(holdings.map(h => stockService.getQuote(h.symbol)))
+  → Logs individual failures; never fails the whole response
+
+takeSnapshot(userId, cashBalance, holdings, quoteResults)
+  → Isolated write function; can be moved to cron/trigger without API change
+  → Upserts PortfolioSnapshot for today (idempotent)
+
+getHoldings  → enriches with currentPrice, currentValue, unrealisedPnL, unrealisedPnLPct
+getSummary   → computes from live prices; falls back to cost for failed quotes
+getCash      → unchanged (no price fetch needed)
+getSnapshots → calls takeSnapshot (fire-and-forget, non-fatal), returns 90-day history
+```
+
+### New Endpoint
+
+`GET /api/portfolio/snapshots` — returns last 90 days of `PortfolioSnapshot` records:
+```json
+{
+  "success": true,
+  "count": 1,
+  "data": [
+    { "date": "2026-06-29T00:00:00.000Z", "totalValue": 99870.24, "cashBalance": 99432.44 }
+  ]
+}
+```
+
+### Files Modified
+
+| File | Change |
+|---|---|
+| `backend/controllers/portfolioController.js` | Full rewrite — live prices, isolated snapshot writer |
+| `backend/routes/portfolio.js` | Added `GET /snapshots` route |
+| `frontend/src/services/portfolioService.js` | Added `getSnapshots()` method |
+| `frontend/src/pages/Dashboard.jsx` | `snapshots` state, `getSnapshots()` in fetchAll, `buildPerformanceChart` uses real data |
+
+### Design Decisions
+
+- **`Promise.allSettled` not `Promise.all`**: one Finnhub timeout never crashes the entire portfolio response. Failed symbols fall back to cost price in summary, null in holdings.
+- **`takeSnapshot` is isolated**: the function is decoupled from the HTTP handler. Moving it to a cron job means changing only one line in a future jobs file — the function signature and schema stay the same.
+- **Snapshot on GET**: simple and correct for a paper-trading app. The snapshot is upserted (not inserted), so calling the endpoint 100 times per day produces exactly one document per calendar day.
+
+### Verified
+
+```
+✓ GET /api/portfolio/summary      → portfolioValue = cashBalance + live market value
+✓ GET /api/portfolio/holdings     → currentPrice, currentValue, unrealisedPnL all non-null
+✓ GET /api/portfolio/snapshots    → writes today's snapshot; returns array
+✓ Buy 2 AAPL at live price $283.78 → holdings enriched, balance debited correctly
+✓ Summary after buy: portfolioValue = $99,432.44 + $567.56 = $100,000 (exactly, just bought)
+✓ Snapshot count: 1 entry for today's date
+```
+
+### Commit Message
+
+```
+feat(portfolio): live Finnhub prices for holdings/summary, portfolio snapshots for chart
+```

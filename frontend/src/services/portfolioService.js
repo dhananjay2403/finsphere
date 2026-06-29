@@ -60,6 +60,18 @@ const portfolioService = {
     const response = await api.get('/portfolio/cash');
     return response.data.data; // { cashBalance }
   },
+
+  /**
+   * Get portfolio performance snapshot history (last 90 days).
+   * Also triggers today's snapshot write on the backend (non-fatal).
+   * Calls: GET /api/portfolio/snapshots
+   *
+   * @returns {Promise<Array<{ date: string, totalValue: number, cashBalance: number }>>}
+   */
+  getSnapshots: async () => {
+    const response = await api.get('/portfolio/snapshots');
+    return response.data.data; // array of snapshot objects
+  },
 };
 
 

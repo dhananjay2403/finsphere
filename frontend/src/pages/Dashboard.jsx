@@ -122,41 +122,35 @@ function buildDashboardAllocations(holdings) {
 }
 
 /**
- * Build portfolio performance chart data from trade history.
+ * Build portfolio performance chart data.
  *
- * We walk through trades chronologically and accumulate a running
- * "total invested" value — this gives a meaningful line chart showing
- * how the portfolio grew over time, without needing live prices.
+ * Primary source: PortfolioSnapshot records returned by GET /api/portfolio/snapshots.
+ * Each snapshot holds the real portfolio value (cash + live market prices) at
+ * the time it was written, giving an accurate picture of portfolio growth.
  *
- * Returns: [{ day: 'Jun 12', value: 12400 }, ...]
+ * Fallback (no snapshots yet): approximate using trade history.
+ * Walks trades chronologically; each data point is cashBalance + cumulative
+ * invested-at-cost at that moment in time.  This is an approximation that
+ * ignores unrealised P&L but is better than a flat line.
+ *
+ * Returns: [{ day: 'Jun 12', value: 98400 }, ...]
  */
-function buildPerformanceChart(trades, cashBalance) {
+function buildPerformanceChart(trades, cashBalance, snapshots) {
+  // ── Primary path: real snapshot data ──
+  if (snapshots && snapshots.length > 0) {
+    return snapshots.map((s) => ({
+      day: new Date(s.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
+      value: s.totalValue,
+    }));
+  }
+
+  // ── Fallback: trade-based approximation ──
   if (!trades || trades.length === 0) return [];
 
-  // Sort trades oldest-first
   const sorted = [...trades].sort(
     (a, b) => new Date(a.executedAt) - new Date(b.executedAt)
   );
 
-  // Start from $100,000 and simulate running balance
-  const INITIAL = 100_000;
-  let running = INITIAL;
-  const points = [];
-
-  for (const trade of sorted) {
-    if (trade.type === 'buy') {
-      running -= trade.totalAmount;
-    } else {
-      running += trade.totalAmount;
-    }
-    points.push({
-      day: new Date(trade.executedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
-      // Portfolio value = remaining cash + value of purchases (approximate as totalInvested at cost)
-      value: parseFloat((INITIAL).toFixed(2)), // placeholder baseline
-    });
-  }
-
-  // Build cumulative invested value over time
   let cumInvested = 0;
   return sorted.map((trade) => {
     if (trade.type === 'buy') {
@@ -164,9 +158,10 @@ function buildPerformanceChart(trades, cashBalance) {
     } else {
       cumInvested = Math.max(0, cumInvested - trade.totalAmount);
     }
+    // Approximate total value = current cash + what was invested up to this point
     return {
       day: new Date(trade.executedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
-      value: parseFloat((INITIAL - (INITIAL - cashBalance - cumInvested)).toFixed(2)),
+      value: parseFloat((cashBalance + cumInvested).toFixed(2)),
     };
   });
 }
@@ -333,6 +328,7 @@ function Dashboard() {
   const [holdings, setHoldings] = useState([]);
   const [allTrades, setAllTrades] = useState([]);
   const [recentTrades, setRecentTrades] = useState([]);
+  const [snapshots, setSnapshots] = useState([]);
 
   const [summaryLoading, setSummaryLoading] = useState(true);
   const [holdingsLoading, setHoldingsLoading] = useState(true);
@@ -341,13 +337,14 @@ function Dashboard() {
 
   // Fetch on mount 
   const fetchAll = useCallback(async () => {
-    // Fire all three in parallel — independent of each other
-    const [summaryResult, holdingsResult, tradesResult, allTradesResult] =
+    // Fire all requests in parallel — independent of each other
+    const [summaryResult, holdingsResult, tradesResult, allTradesResult, snapshotsResult] =
       await Promise.allSettled([
         portfolioService.getSummary(),
         portfolioService.getHoldings(),
         tradeService.getHistory({ limit: 5, page: 1 }),        // recent 5 for the panel
         tradeService.getHistory({ limit: 100, page: 1 }),      // all for chart + health
+        portfolioService.getSnapshots(),                        // performance chart history
       ]);
 
     if (summaryResult.status === 'fulfilled') setSummary(summaryResult.value);
@@ -359,6 +356,8 @@ function Dashboard() {
     if (tradesResult.status === 'fulfilled') setRecentTrades(tradesResult.value.data);
     if (allTradesResult.status === 'fulfilled') setAllTrades(allTradesResult.value.data);
     setTradesLoading(false);
+
+    if (snapshotsResult.status === 'fulfilled') setSnapshots(snapshotsResult.value);
   }, []);
 
   useEffect(() => { fetchAll(); }, [fetchAll]);
@@ -381,8 +380,8 @@ function Dashboard() {
     : computeHealthScore({ holdings, summary, tradeCount: allTrades.length });
   const health = getHealthLabel(healthData.total);
 
-  // Performance chart
-  const chartData = buildPerformanceChart(allTrades, summary?.cashBalance ?? 0);
+  // Performance chart — real snapshot data first, trade-math fallback
+  const chartData = buildPerformanceChart(allTrades, summary?.cashBalance ?? 0, snapshots);
 
   // Challenge
   const challengeDays = computeChallengeDays(allTrades);

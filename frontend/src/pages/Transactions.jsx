@@ -19,29 +19,25 @@ import tradeService from '../services/tradeService';
 import { ROUTES } from '../utils/constants';
 
 
-// ---------------------------------------------------------------------------
 // Constants
-// ---------------------------------------------------------------------------
 
 const PAGE_SIZE = 20;
 
 const TABLE_HEADERS = [
-  { label: 'Date',       align: 'left'  },
-  { label: 'Symbol',     align: 'left'  },
-  { label: 'Company',    align: 'left'  },
-  { label: 'Type',       align: 'center' },
-  { label: 'Qty',        align: 'right' },
-  { label: 'Price',      align: 'right' },
-  { label: 'Total',      align: 'right' },
+  { label: 'Date', align: 'left' },
+  { label: 'Symbol', align: 'left' },
+  { label: 'Company', align: 'left' },
+  { label: 'Type', align: 'center' },
+  { label: 'Qty', align: 'right' },
+  { label: 'Price', align: 'right' },
+  { label: 'Total', align: 'right' },
 ];
 
-// Grid template used for both header and rows
-const TABLE_GRID = '120px 80px 1fr 80px 60px 100px 110px';
+// Wider Date + consistent numeric columns for a polished financial-table feel
+const TABLE_GRID = '140px 72px 1fr 82px 64px 110px 120px';
 
 
-// ---------------------------------------------------------------------------
 // Helpers
-// ---------------------------------------------------------------------------
 
 function formatDate(iso) {
   return new Date(iso).toLocaleDateString('en-US', {
@@ -59,24 +55,26 @@ function formatTime(iso) {
 }
 
 
-// ---------------------------------------------------------------------------
 // Sub-components
-// ---------------------------------------------------------------------------
 
-/** Desktop table header row */
+/** Sticky desktop table header */
 function TableHeader() {
   return (
     <Box
       sx={{
         display: { xs: 'none', md: 'grid' },
         gridTemplateColumns: TABLE_GRID,
-        gap: 1,
-        px: 2,
+        gap: 2,
+        px: 3,
         py: 1.25,
         borderBottom: '2px solid',
         borderColor: 'divider',
         bgcolor: '#FAFAF9',
         borderRadius: '8px 8px 0 0',
+        // Sticky header — only sticks within the Paper's scroll container
+        position: 'sticky',
+        top: 0,
+        zIndex: 1,
       }}
     >
       {TABLE_HEADERS.map(({ label, align }) => (
@@ -89,7 +87,7 @@ function TableHeader() {
             textAlign: align,
             fontSize: '0.68rem',
             textTransform: 'uppercase',
-            letterSpacing: '0.04em',
+            letterSpacing: '0.05em',
           }}
         >
           {label}
@@ -108,19 +106,21 @@ function TradeRow({ trade, isLast }) {
       sx={{
         display: { xs: 'none', md: 'grid' },
         gridTemplateColumns: TABLE_GRID,
-        gap: 1,
-        px: 2,
-        py: 1.5,
+        gap: 2,
+        px: 3,
+        py: 2,
         alignItems: 'center',
         borderBottom: isLast ? 'none' : '1px solid',
         borderColor: 'divider',
-        transition: 'background-color 0.1s ease',
-        '&:hover': { bgcolor: '#FAFAF9' },
+        transition: 'background-color 0.12s ease',
+        '&:hover': {
+          bgcolor: 'rgba(122, 62, 72, 0.03)',
+        },
       }}
     >
-      {/* Date */}
+      {/* Date + time */}
       <Box>
-        <Typography variant="body2" fontWeight={500} sx={{ fontSize: '0.82rem' }}>
+        <Typography variant="body2" fontWeight={500} sx={{ fontSize: '0.83rem' }}>
           {formatDate(trade.executedAt)}
         </Typography>
         <Typography variant="caption" color="text.disabled" sx={{ fontSize: '0.7rem' }}>
@@ -134,12 +134,7 @@ function TradeRow({ trade, isLast }) {
       </Typography>
 
       {/* Company */}
-      <Typography
-        variant="body2"
-        color="text.secondary"
-        noWrap
-        sx={{ fontSize: '0.82rem' }}
-      >
+      <Typography variant="body2" color="text.secondary" noWrap sx={{ fontSize: '0.83rem' }}>
         {trade.name}
       </Typography>
 
@@ -168,12 +163,20 @@ function TradeRow({ trade, isLast }) {
       </Box>
 
       {/* Quantity */}
-      <Typography variant="body2" fontWeight={600} sx={{ textAlign: 'right', fontSize: '0.82rem' }}>
+      <Typography
+        variant="body2"
+        fontWeight={600}
+        sx={{ textAlign: 'right', fontSize: '0.83rem', fontVariantNumeric: 'tabular-nums' }}
+      >
         {trade.quantity}
       </Typography>
 
       {/* Price per share */}
-      <Typography variant="body2" fontWeight={500} sx={{ textAlign: 'right', fontSize: '0.82rem' }}>
+      <Typography
+        variant="body2"
+        fontWeight={500}
+        sx={{ textAlign: 'right', fontSize: '0.83rem', fontVariantNumeric: 'tabular-nums' }}
+      >
         ${trade.pricePerShare?.toFixed(2)}
       </Typography>
 
@@ -183,11 +186,12 @@ function TradeRow({ trade, isLast }) {
         fontWeight={700}
         sx={{
           textAlign: 'right',
-          fontSize: '0.82rem',
+          fontSize: '0.83rem',
           color: isBuy ? '#15803d' : '#dc2626',
+          fontVariantNumeric: 'tabular-nums',
         }}
       >
-        {isBuy ? '-' : '+'}{formatCurrency(trade.totalAmount)}
+        {isBuy ? '−' : '+'}{formatCurrency(trade.totalAmount)}
       </Typography>
     </Box>
   );
@@ -244,7 +248,7 @@ function TradeCard({ trade }) {
       </Box>
       <Box sx={{ textAlign: 'right', flexShrink: 0 }}>
         <Typography variant="body2" fontWeight={700} color={isBuy ? '#15803d' : '#dc2626'}>
-          {isBuy ? '-' : '+'}{formatCurrency(trade.totalAmount)}
+          {isBuy ? '−' : '+'}{formatCurrency(trade.totalAmount)}
         </Typography>
         <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.7rem' }}>
           @ ${trade.pricePerShare?.toFixed(2)}
@@ -254,20 +258,20 @@ function TradeCard({ trade }) {
   );
 }
 
-/** Loading skeleton — renders desktop rows on md+ and mobile cards on xs */
+/** Loading skeletons */
 function LoadingSkeletons() {
   return (
     <>
-      {/* Desktop skeleton rows */}
+      {/* Desktop */}
       {[1, 2, 3, 4, 5].map((i) => (
         <Box
           key={i}
           sx={{
             display: { xs: 'none', md: 'grid' },
             gridTemplateColumns: TABLE_GRID,
-            gap: 1,
-            px: 2,
-            py: 1.5,
+            gap: 2,
+            px: 3,
+            py: 2,
             alignItems: 'center',
             borderBottom: '1px solid',
             borderColor: 'divider',
@@ -286,7 +290,7 @@ function LoadingSkeletons() {
         </Box>
       ))}
 
-      {/* Mobile skeleton cards */}
+      {/* Mobile */}
       {[1, 2, 3, 4, 5].map((i) => (
         <Box
           key={i}
@@ -315,10 +319,7 @@ function LoadingSkeletons() {
 }
 
 
-// ---------------------------------------------------------------------------
 // Main component
-// ---------------------------------------------------------------------------
-
 function Transactions() {
   const navigate = useNavigate();
 
@@ -338,7 +339,7 @@ function Transactions() {
       setTrades(result.data);
       setTotal(result.total);
       setTotalPages(result.totalPages);
-    } catch (err) {
+    } catch {
       setError('Could not load transaction history. Please refresh.');
     } finally {
       setLoading(false);
@@ -354,55 +355,48 @@ function Transactions() {
   return (
     <Container maxWidth="lg" sx={{ py: 4 }}>
 
-      {/* Header */}
-      <Box
-        sx={{
-          mb: 4,
-          display: 'flex',
-          alignItems: { xs: 'flex-start', sm: 'center' },
-          flexDirection: { xs: 'column', sm: 'row' },
-          gap: { xs: 1.5, sm: 0 },
-          justifyContent: 'space-between',
-        }}
-      >
-        <Box>
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 0.5 }}>
-            <Button
-              size="small"
-              startIcon={<ArrowBackIcon sx={{ fontSize: 14 }} />}
-              onClick={() => navigate(ROUTES.DASHBOARD)}
-              sx={{
-                color: 'text.secondary',
-                fontWeight: 500,
-                fontSize: '0.8rem',
-                minWidth: 0,
-                px: 1,
-                py: 0.5,
-                '&:hover': { bgcolor: 'rgba(122, 62, 72, 0.04)', color: 'primary.main' },
-              }}
-            >
-              Dashboard
-            </Button>
-          </Box>
-          <Typography variant="h4" fontWeight={700} letterSpacing="-0.025em">
-            Transactions
-          </Typography>
-          <Typography variant="body2" color="text.secondary" mt={0.5}>
-            Your complete trade history
-          </Typography>
+      {/* Page header — centered */}
+      <Box sx={{ mb: 4, textAlign: 'center' }}>
+        {/* Back breadcrumb */}
+        <Box sx={{ display: 'flex', justifyContent: 'center', mb: 1 }}>
+          <Button
+            size="small"
+            startIcon={<ArrowBackIcon sx={{ fontSize: 14 }} />}
+            onClick={() => navigate(ROUTES.DASHBOARD)}
+            sx={{
+              color: 'text.secondary',
+              fontWeight: 500,
+              fontSize: '0.8rem',
+              minWidth: 0,
+              px: 1,
+              py: 0.5,
+              '&:hover': { bgcolor: 'rgba(122, 62, 72, 0.04)', color: 'primary.main' },
+            }}
+          >
+            Dashboard
+          </Button>
         </Box>
 
+        <Typography variant="h4" fontWeight={700} letterSpacing="-0.025em">
+          Transactions
+        </Typography>
+        <Typography variant="body2" color="text.secondary" mt={0.5}>
+          Your complete trade history
+        </Typography>
+
         {!loading && total > 0 && (
-          <Chip
-            label={`${total} trade${total !== 1 ? 's' : ''}`}
-            size="small"
-            sx={{
-              bgcolor: 'rgba(122, 62, 72, 0.08)',
-              color: 'primary.main',
-              fontWeight: 600,
-              fontSize: '0.72rem',
-            }}
-          />
+          <Box sx={{ mt: 1.5 }}>
+            <Chip
+              label={`${total} trade${total !== 1 ? 's' : ''}`}
+              size="small"
+              sx={{
+                bgcolor: 'rgba(122, 62, 72, 0.08)',
+                color: 'primary.main',
+                fontWeight: 600,
+                fontSize: '0.72rem',
+              }}
+            />
+          </Box>
         )}
       </Box>
 
@@ -422,7 +416,7 @@ function Transactions() {
           overflow: 'hidden',
         }}
       >
-        {/* Desktop header */}
+        {/* Desktop sticky header */}
         <TableHeader />
 
         {/* Loading */}

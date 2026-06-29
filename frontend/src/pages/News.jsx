@@ -294,45 +294,32 @@ function News() {
   return (
     <Container maxWidth="lg" sx={{ py: 4 }}>
 
-      {/* Header */}
-      <Box
-        sx={{
-          display: 'flex',
-          justifyContent: 'space-between',
-          alignItems: 'flex-start',
-          mb: 3,
-          flexWrap: 'wrap',
-          gap: 2,
-          flexDirection: { xs: 'column', sm: 'row' },
-        }}
-      >
-        <Box sx={{ textAlign: { xs: 'center', md: 'left' }, width: { xs: '100%', sm: 'auto' } }}>
-          <Typography variant="h4" fontWeight={700} letterSpacing="-0.025em">
-            Market News
-          </Typography>
-          <Typography variant="body2" color="text.secondary" mt={0.5}>
-            Stay updated with the latest financial headlines
-          </Typography>
-        </Box>
-
-        {/* Article count badge */}
+      {/* Header — centered */}
+      <Box sx={{ mb: 3, textAlign: 'center' }}>
+        <Typography variant="h4" fontWeight={700} letterSpacing="-0.025em">
+          Market News
+        </Typography>
+        <Typography variant="body2" color="text.secondary" mt={0.5}>
+          Stay updated with the latest financial headlines
+        </Typography>
         {!loading && articles.length > 0 && (
-          <Chip
-            label={`${articles.length} articles`}
-            size="small"
-            sx={{
-              bgcolor: 'rgba(122, 62, 72, 0.08)',
-              color: 'primary.main',
-              fontWeight: 600,
-              fontSize: '0.72rem',
-              alignSelf: 'center',
-            }}
-          />
+          <Box sx={{ mt: 1.5 }}>
+            <Chip
+              label={`${articles.length} articles`}
+              size="small"
+              sx={{
+                bgcolor: 'rgba(122, 62, 72, 0.08)',
+                color: 'primary.main',
+                fontWeight: 600,
+                fontSize: '0.72rem',
+              }}
+            />
+          </Box>
         )}
       </Box>
 
-      {/* Category filter */}
-      <Box sx={{ display: 'flex', gap: 1, mb: 3, flexWrap: 'wrap' }}>
+      {/* Category filter — centered */}
+      <Box sx={{ display: 'flex', gap: 1, mb: 3, flexWrap: 'wrap', justifyContent: 'center' }}>
         {CATEGORIES.map(({ label, value }) => (
           <Chip
             key={value}

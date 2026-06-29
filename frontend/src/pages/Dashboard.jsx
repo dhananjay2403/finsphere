@@ -702,15 +702,15 @@ function Dashboard() {
                   />
                 </Box>
 
-                <Box sx={{ height: 6, bgcolor: '#E8DED5', borderRadius: 3, overflow: 'hidden', mb: 2.5 }}>
+                <Box sx={{ height: 6, bgcolor: '#E8DED5', borderRadius: 3, overflow: 'hidden', mb: 2 }}>
                   <Box sx={{ height: '100%', width: `${healthData.total}%`, bgcolor: 'primary.main', borderRadius: 3 }} />
                 </Box>
 
                 {/* Sub-metrics */}
-                <Grid container spacing={1}>
+                <Grid container spacing={1.5}>
                   {healthData.metrics.map(({ label, score }) => (
                     <Grid item xs={6} key={label}>
-                      <Box sx={{ p: 1.5, bgcolor: '#F8F4EF', borderRadius: 1.5 }}>
+                      <Box sx={{ p: 2, bgcolor: '#F8F4EF', borderRadius: 1.5 }}>
                         <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 0.5 }}>
                           <Typography variant="caption" color="text.secondary" fontWeight={500} sx={{ fontSize: '0.7rem' }}>
                             {label}

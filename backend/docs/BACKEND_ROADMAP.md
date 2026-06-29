@@ -837,3 +837,113 @@ fix(portfolio): prevent snapshot overwrite on Finnhub rate-limit; add Transactio
 - Transactions: new /transactions page with desktop table, mobile cards, pagination
 - constants.js + AppRoutes.jsx: TRANSACTIONS route registered
 ```
+
+---
+
+## Milestone 15I — Final UI Refinement & Layout Polish ✅
+
+**Status**: Complete  
+**Scope**: Frontend only — no backend changes.
+
+### Objective 1 — Health Score Card Spacing (`Dashboard.jsx`)
+
+| Property | Before | After |
+|---|---|---|
+| Progress bar `mb` | `2.5` | `2` |
+| Sub-metric Grid `spacing` | `1` | `1.5` |
+| Sub-metric box `p` | `1.5` | `2` |
+
+The tighter progress-bar margin combined with slightly more spacious metric boxes redistributes the available height more naturally, eliminating the dead space beneath the 2×2 grid.
+
+---
+
+### Objective 2 — Transactions Desktop Table (`Transactions.jsx`)
+
+| Property | Before | After |
+|---|---|---|
+| Grid template | `120px 80px 1fr 80px 60px 100px 110px` | `140px 72px 1fr 82px 64px 110px 120px` |
+| Column gap | `gap: 1` | `gap: 2` |
+| Row / header padding | `px: 2, py: 1.5` | `px: 3, py: 2` |
+| Hover state | none | `rgba(122, 62, 72, 0.03)` subtle tint |
+| Sticky header | no | `position: sticky; top: 0; z-index: 1` |
+| Numeric alignment | `textAlign: 'right'` | + `fontVariantNumeric: 'tabular-nums'` |
+| Page header | left-aligned | centered |
+
+---
+
+### Objective 3 — Portfolio Refinement (`Portfolio.jsx`)
+
+- **Removed**: Largest Position card, `findTopHolder`, `topHolder` variable, `TrendingUpIcon` import
+- **Reordered right column**: Allocation chart now appears **above** Portfolio Breakdown
+- **P&L Summary**: `flex: 1` removed — card now shrink-wraps its three rows
+- **Page header**: centered
+- Bundle size: 1079 kB → 1078 kB (dead code removed)
+
+---
+
+### Objective 4 — News Page Header (`News.jsx`)
+
+- Title + subtitle: centered (`textAlign: 'center'`)
+- Article count chip: moved below subtitle (no longer floated right)
+- Category filter chips: `justifyContent: 'center'`
+
+---
+
+### Objective 5 — LearningHub Header (`LearningHub.jsx`)
+
+- Title + subtitle: centered (`textAlign: 'center'`)
+- Difficulty filter chips: `justifyContent: 'center'` (previously `flex-start` on desktop)
+
+---
+
+### Objective 6 — Trade Page Header (`TradePage.jsx`)
+
+- Title + subtitle: centered
+- The flex space-between wrapper was simplified to a plain centered Box
+- No other Trade page changes
+
+---
+
+### Files Modified
+
+| File | Change |
+|---|---|
+| `frontend/src/pages/Dashboard.jsx` | Health Score metric spacing |
+| `frontend/src/pages/Transactions.jsx` | Centered header; wider/spacious table; hover; sticky header; tabular-nums |
+| `frontend/src/pages/Portfolio.jsx` | Removed Largest Position; Allocation above Breakdown; P&L shrink-wraps; centered header |
+| `frontend/src/pages/News.jsx` | Centered header + filter chips |
+| `frontend/src/pages/LearningHub.jsx` | Centered header + filter chips |
+| `frontend/src/pages/TradePage.jsx` | Centered header only |
+
+### No Changes
+
+| Area | Reason |
+|---|---|
+| Dashboard page | Left-aligned as specified |
+| Backend | No backend changes in this milestone |
+| Mobile layouts | Preserved — all xs/sm stacks unchanged |
+| Trade page content | Only header centered; rest unchanged |
+| News provider | Finnhub retained; M15H fallback accepted |
+
+### Build Verification
+
+```
+✓ 1813 modules transformed
+✓ 0 errors
+Bundle: 1,078.11 kB (−1.69 kB vs M15H)
+```
+
+### Commit Message
+
+```
+style(ui): milestone 15I — center page headers; polish Transactions table; refine Portfolio layout
+
+- Dashboard: Health Score metric boxes p:1.5→2, spacing:1→1.5, progress bar mb:2.5→2
+- Transactions: centered header; TABLE_GRID widened; gap:1→2; px:2→3 py:1.5→2;
+  subtle hover; sticky header; tabular-nums on numeric cols
+- Portfolio: remove Largest Position card; Allocation above Breakdown; P&L
+  shrink-wraps (flex:1 removed); centered header; TrendingUpIcon cleaned up
+- News: centered title + chip count + category filters
+- LearningHub: centered title + difficulty filters
+- Trade: centered title + subtitle only
+```

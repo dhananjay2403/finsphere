@@ -281,8 +281,8 @@ function LearningHub() {
   return (
     <Container maxWidth="lg" sx={{ py: 4 }}>
 
-      {/* Title */}
-      <Box sx={{ mb: 3, textAlign: { xs: 'center', md: 'left' } }}>
+      {/* Title — centered */}
+      <Box sx={{ mb: 3, textAlign: 'center' }}>
         <Typography variant="h4" fontWeight={700} letterSpacing="-0.025em">
           Learning Hub
         </Typography>
@@ -291,8 +291,8 @@ function LearningHub() {
         </Typography>
       </Box>
 
-      {/* Filters */}
-      <Box sx={{ display: 'flex', gap: 1, mb: 3, justifyContent: { xs: 'center', md: 'flex-start' }, flexWrap: 'wrap' }}>
+      {/* Filters — centered */}
+      <Box sx={{ display: 'flex', gap: 1, mb: 3, justifyContent: 'center', flexWrap: 'wrap' }}>
         {FILTERS.map((f) => (
           <Chip
             key={f}

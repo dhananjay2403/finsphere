@@ -486,16 +486,14 @@ function TradePage() {
   return (
     <Container maxWidth="lg" sx={{ py: 4 }}>
 
-      {/* Page header */}
-      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 4, flexWrap: 'wrap', gap: 1, flexDirection: { xs: 'column', sm: 'row' } }}>
-        <Box sx={{ textAlign: { xs: 'center', md: 'left' }, width: { xs: '100%', sm: 'auto' } }}>
-          <Typography variant="h4" fontWeight={700} letterSpacing="-0.025em">
-            Trade
-          </Typography>
-          <Typography variant="body2" color="text.secondary" mt={0.5}>
-            Buy and sell stocks with virtual capital
-          </Typography>
-        </Box>
+      {/* Page header — centered */}
+      <Box sx={{ mb: 4, textAlign: 'center' }}>
+        <Typography variant="h4" fontWeight={700} letterSpacing="-0.025em">
+          Trade
+        </Typography>
+        <Typography variant="body2" color="text.secondary" mt={0.5}>
+          Buy and sell stocks with virtual capital
+        </Typography>
       </Box>
 
       <Grid container spacing={3}>

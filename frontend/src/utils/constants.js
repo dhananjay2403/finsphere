@@ -8,6 +8,7 @@ export const ROUTES = {
   PORTFOLIO: '/portfolio',
   NEWS: '/news',
   LEARN: '/learn',
+  TRANSACTIONS: '/transactions',
 };
 
 // localStorage key constants

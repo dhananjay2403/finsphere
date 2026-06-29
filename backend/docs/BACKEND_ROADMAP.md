@@ -705,4 +705,135 @@ cashScore = max(0, 100 - cashDelta × 250)
 
 ```
 fix(dashboard): correct Cash Management health score; chart label; live price for top holder
+
+---
+
+## Milestone 15H — Portfolio Stability & UI Polish ✅
+
+**Status**: Complete
+
+### Objective 1 — Portfolio Value Reset Bug (Root Cause Fixed)
+
+**Root cause trace:**
+
+```
+Dashboard mounts
+  → fetchAll() fires 5 parallel requests:
+      getSummary()     → fetchQuotes() for all holdings
+      getHoldings()    → fetchQuotes() for all holdings
+      getSnapshots()   → fetchQuotes() for all holdings   ← third concurrent batch
+
+Finnhub free tier rate-limits the third batch (429 / timeout)
+  → Promise.allSettled catches silently
+  → ALL quotes fall back to avgCostPrice
+  → takeSnapshot() computes:
+      totalValue = cashBalance + sum(qty × avgCostPrice)  ≈ $100,000
+
+findOneAndUpdate({ upsert: true }, { totalValue, cashBalance })
+  → OVERWRITES today's accurate snapshot (written earlier)
+  → Chart now shows degraded value ≈ $100,000 "reset"
+```
+
+**Fix — `takeSnapshot()` now accepts `quotesSucceeded` flag:**
+
+| `quotesSucceeded` | MongoDB operation | Effect |
+|---|---|---|
+| `true` (≥1 live quote) | `$set { totalValue, cashBalance }` | Writes accurate real-time value |
+| `false` (all quotes failed) | `$setOnInsert { totalValue, cashBalance }` | Only creates new document; **never overwrites** an existing accurate snapshot |
+
+No workarounds, no polling changes, no rate-limit bypass — the actual write semantics are fixed.
+
+---
+
+### Objective 2 — Dashboard Card Height Equalization
+
+Both "Portfolio Health Score" and "Investment Challenge" `<Paper>` elements now have:
+```
+height: '100%', display: 'flex', flexDirection: 'column'
+```
+The MUI `<Grid>` row stretches both to equal height automatically, producing a symmetrical layout.
+
+---
+
+### Objective 3 — Portfolio Page Desktop Redesign
+
+Replaced 2-column (8/4) layout with balanced 3-column desktop grid:
+
+| Breakpoint | Left | Middle | Right |
+|---|---|---|---|
+| `lg` | `5/12` Holdings table | `3/12` Cash + P&L | `4/12` Breakdown + Allocation + Largest |
+| `md` | `12/12` Holdings | `6/12` Cash + P&L | `6/12` Breakdown + Allocation + Largest |
+| `xs/sm` | Single column | Single column | Single column |
+
+- Allocation card placed above Largest Position (as specified)
+- Holdings table removed `maxHeight: 480` / `overflowY: auto` constraint
+- Common `HoldingsTableHeader` sub-component extracted to avoid duplication
+
+---
+
+### Objective 4 — News Fallback Thumbnails
+
+The existing Finnhub provider is kept. The `NewspaperIcon` placeholder replaced with:
+- Warm gradient background (`#F0E9E2 → #D4C5BA`)
+- Source initial monogram in a circular badge (e.g. "R" for Reuters)
+- Small source name label below
+
+Card dimensions remain fixed; layout is fully consistent whether or not a thumbnail loads.
+
+---
+
+### Objective 5 — Transactions Page
+
+New dedicated `/transactions` route and page:
+
+- Full trade history via existing `GET /api/trades/history` (no new backend API)
+- Desktop: 7-column grid table (Date · Symbol · Company · Type · Qty · Price · Total)
+- Mobile: compact card layout with icon, symbol, type, total
+- Pagination: Prev/Next buttons, page counter, respects backend `totalPages`
+- Back-to-Dashboard breadcrumb button — no Navbar entry added
+
+---
+
+### Files Modified
+
+| File | Change |
+|---|---|
+| `backend/controllers/portfolioController.js` | `takeSnapshot()` — `quotesSucceeded` flag; `$setOnInsert` for degraded snapshots |
+| `frontend/src/pages/Dashboard.jsx` | Health/Challenge card `height:100%`; "View All" → `ROUTES.TRANSACTIONS` |
+| `frontend/src/pages/Portfolio.jsx` | Full 3-column desktop redesign |
+| `frontend/src/pages/News.jsx` | Gradient + monogram fallback thumbnail |
+| `frontend/src/pages/Transactions.jsx` | **[NEW]** Complete transactions page |
+| `frontend/src/utils/constants.js` | Added `TRANSACTIONS: '/transactions'` |
+| `frontend/src/routes/AppRoutes.jsx` | Registered `/transactions` route under ProtectedRoute |
+
+### No Changes
+
+| Area | Reason |
+|---|---|
+| Navbar | Transactions accessible via Dashboard "View All"; no extra nav tab |
+| Backend trade API | Existing `GET /api/trades/history` reused as-is |
+| News provider (Finnhub) | Provider retained; only fallback UI improved |
+| Auth, Docker, Redis, CI/CD | Out of scope for this milestone |
+
+### Responsive Verification
+
+| Page | xs | sm | md | lg |
+|---|---|---|---|---|
+| Dashboard | ✓ single col KPIs | ✓ | ✓ chart+alloc | ✓ 3-wide |
+| Portfolio | ✓ stack | ✓ stack | ✓ Holdings full + 2 side cols | ✓ 3-col |
+| Transactions | ✓ cards | ✓ cards | ✓ table | ✓ table |
+| News | ✓ 1-col | ✓ 2-col | ✓ 3-col | ✓ 3-col |
+
+### Commit Message
+
+```
+fix(portfolio): prevent snapshot overwrite on Finnhub rate-limit; add Transactions page; polish dashboard & portfolio layout
+
+- portfolioController: takeSnapshot() uses $setOnInsert when all quotes fail — prevents
+  degraded (~$100k) value from overwriting an accurate same-day snapshot
+- Dashboard: Health Score + Challenge cards equalised to height:100%; View All → /transactions
+- Portfolio: 3-column desktop layout (Holdings | Cash+P&L | Breakdown+Allocation+Largest)
+- News: gradient + source-initial monogram replaces plain icon fallback
+- Transactions: new /transactions page with desktop table, mobile cards, pagination
+- constants.js + AppRoutes.jsx: TRANSACTIONS route registered
 ```

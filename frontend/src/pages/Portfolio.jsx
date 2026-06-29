@@ -199,6 +199,40 @@ function HoldingRowSkeleton() {
   );
 }
 
+// Shared table header used in both loading and live states
+function HoldingsTableHeader() {
+  return (
+    <Box
+      sx={{
+        display: 'grid',
+        gridTemplateColumns: '1fr auto auto auto',
+        gap: 1,
+        pb: 1,
+        borderBottom: '2px solid',
+        borderColor: 'divider',
+        mb: 0.5,
+      }}
+    >
+      {['Stock', 'Qty', 'Avg Cost', 'Invested'].map((h) => (
+        <Typography
+          key={h}
+          variant="caption"
+          color="text.secondary"
+          fontWeight={600}
+          sx={{
+            textAlign: h === 'Stock' ? 'left' : 'right',
+            fontSize: '0.68rem',
+            textTransform: 'uppercase',
+            letterSpacing: '0.04em',
+          }}
+        >
+          {h}
+        </Typography>
+      ))}
+    </Box>
+  );
+}
+
 
 // ---------------------------------------------------------------------------
 // Main component
@@ -262,10 +296,19 @@ function Portfolio() {
         </Typography>
       </Box>
 
-      <Grid container spacing={3}>
+      {/* ─────────────────────────────────────────────────────────────────────
+          Desktop (lg): three-column grid
+            Left   lg=5  Holdings table
+            Middle lg=3  Cash Available + P&L Summary
+            Right  lg=4  Portfolio Breakdown + Allocation + Largest Position
 
-        {/* Holdings table */}
-        <Grid item xs={12} md={8}>
+          Tablet (md): Holdings full-width, middle+right side by side
+          Mobile (xs/sm): single-column stack
+          ───────────────────────────────────────────────────────────────────── */}
+      <Grid container spacing={2.5}>
+
+        {/* ── Left column — Holdings table ── */}
+        <Grid item xs={12} md={12} lg={5}>
           <Paper
             elevation={0}
             sx={{
@@ -274,8 +317,6 @@ function Portfolio() {
               borderColor: 'divider',
               borderRadius: 2,
               bgcolor: 'white',
-              maxHeight: 480,
-              overflowY: 'auto',
             }}
           >
             <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
@@ -297,25 +338,7 @@ function Portfolio() {
             {/* Loading skeletons */}
             {holdingsLoading && !holdingsError && (
               <Box>
-                {/* Table header */}
-                <Box
-                  sx={{
-                    display: 'grid',
-                    gridTemplateColumns: '1fr auto auto auto',
-                    gap: 1,
-                    pb: 1,
-                    borderBottom: '2px solid',
-                    borderColor: 'divider',
-                    mb: 0.5,
-                  }}
-                >
-                  {['Stock', 'Qty', 'Avg Cost', 'Invested'].map((h) => (
-                    <Typography key={h} variant="caption" color="text.secondary" fontWeight={600}
-                      sx={{ textAlign: h === 'Stock' ? 'left' : 'right', fontSize: '0.68rem', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
-                      {h}
-                    </Typography>
-                  ))}
-                </Box>
+                <HoldingsTableHeader />
                 {[1, 2, 3].map((i) => <HoldingRowSkeleton key={i} />)}
               </Box>
             )}
@@ -336,25 +359,7 @@ function Portfolio() {
             {/* Live holdings table */}
             {!holdingsLoading && !holdingsError && hasHoldings && (
               <Box>
-                {/* Table header */}
-                <Box
-                  sx={{
-                    display: 'grid',
-                    gridTemplateColumns: '1fr auto auto auto',
-                    gap: 1,
-                    pb: 1,
-                    borderBottom: '2px solid',
-                    borderColor: 'divider',
-                    mb: 0.5,
-                  }}
-                >
-                  {['Stock', 'Qty', 'Avg Cost', 'Invested'].map((h) => (
-                    <Typography key={h} variant="caption" color="text.secondary" fontWeight={600}
-                      sx={{ textAlign: h === 'Stock' ? 'left' : 'right', fontSize: '0.68rem', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
-                      {h}
-                    </Typography>
-                  ))}
-                </Box>
+                <HoldingsTableHeader />
                 {holdings.map((holding, idx) => (
                   <HoldingRow
                     key={holding._id}
@@ -367,9 +372,9 @@ function Portfolio() {
           </Paper>
         </Grid>
 
-        {/* Right column */}
-        <Grid item xs={12} md={4}>
-          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+        {/* ── Middle column — Cash Available + P&L Summary ── */}
+        <Grid item xs={12} md={6} lg={3}>
+          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, height: '100%' }}>
 
             {/* Cash available */}
             <Paper
@@ -396,7 +401,7 @@ function Portfolio() {
             {/* P&L Summary */}
             <Paper
               elevation={0}
-              sx={{ p: 3, border: '1px solid', borderColor: 'divider', borderRadius: 2, bgcolor: 'white' }}
+              sx={{ p: 3, border: '1px solid', borderColor: 'divider', borderRadius: 2, bgcolor: 'white', flex: 1 }}
             >
               <Typography variant="body1" fontWeight={600} mb={2.5}>
                 P&amp;L Summary
@@ -446,6 +451,13 @@ function Portfolio() {
                 </Box>
               ))}
             </Paper>
+
+          </Box>
+        </Grid>
+
+        {/* ── Right column — Breakdown + Allocation + Largest Position ── */}
+        <Grid item xs={12} md={6} lg={4}>
+          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
 
             {/* Portfolio Breakdown — stacked bar + legend */}
             <Paper
@@ -498,52 +510,7 @@ function Portfolio() {
               )}
             </Paper>
 
-            {/* Top Position (largest holding by invested amount) */}
-            <Paper
-              elevation={0}
-              sx={{ p: 3, border: '1px solid', borderColor: 'divider', borderRadius: 2, bgcolor: 'white' }}
-            >
-              <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 2 }}>
-                <Typography variant="body1" fontWeight={600}>
-                  Largest Position
-                </Typography>
-                <TrendingUpIcon sx={{ fontSize: 18, color: 'primary.main', opacity: 0.6 }} />
-              </Box>
-
-              {holdingsLoading ? (
-                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <Box>
-                    <Skeleton width={50} height={18} animation="wave" />
-                    <Skeleton width={90} height={14} sx={{ mt: 0.25 }} animation="wave" />
-                  </Box>
-                  <Skeleton width={60} height={22} sx={{ borderRadius: 3 }} animation="wave" />
-                </Box>
-              ) : !topHolder ? (
-                <Typography variant="caption" color="text.secondary">
-                  No positions yet.
-                </Typography>
-              ) : (
-                <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                  <Box>
-                    <Typography variant="body2" fontWeight={600}>{topHolder.symbol}</Typography>
-                    <Typography variant="caption" color="text.secondary">{topHolder.name}</Typography>
-                  </Box>
-                  <Chip
-                    label={formatCurrency(topHolder.totalInvested)}
-                    size="small"
-                    sx={{
-                      bgcolor: 'rgba(122, 62, 72, 0.08)',
-                      color: 'primary.main',
-                      fontWeight: 600,
-                      fontSize: '0.72rem',
-                      height: 22,
-                    }}
-                  />
-                </Box>
-              )}
-            </Paper>
-
-            {/* Allocation donut — Recharts PieChart */}
+            {/* Allocation donut — Recharts PieChart (above Largest Position) */}
             <Paper
               elevation={0}
               sx={{ p: 3, border: '1px solid', borderColor: 'divider', borderRadius: 2, bgcolor: 'white' }}
@@ -598,6 +565,51 @@ function Portfolio() {
                     ))}
                   </Box>
                 </>
+              )}
+            </Paper>
+
+            {/* Largest Position */}
+            <Paper
+              elevation={0}
+              sx={{ p: 3, border: '1px solid', borderColor: 'divider', borderRadius: 2, bgcolor: 'white' }}
+            >
+              <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 2 }}>
+                <Typography variant="body1" fontWeight={600}>
+                  Largest Position
+                </Typography>
+                <TrendingUpIcon sx={{ fontSize: 18, color: 'primary.main', opacity: 0.6 }} />
+              </Box>
+
+              {holdingsLoading ? (
+                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <Box>
+                    <Skeleton width={50} height={18} animation="wave" />
+                    <Skeleton width={90} height={14} sx={{ mt: 0.25 }} animation="wave" />
+                  </Box>
+                  <Skeleton width={60} height={22} sx={{ borderRadius: 3 }} animation="wave" />
+                </Box>
+              ) : !topHolder ? (
+                <Typography variant="caption" color="text.secondary">
+                  No positions yet.
+                </Typography>
+              ) : (
+                <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                  <Box>
+                    <Typography variant="body2" fontWeight={600}>{topHolder.symbol}</Typography>
+                    <Typography variant="caption" color="text.secondary">{topHolder.name}</Typography>
+                  </Box>
+                  <Chip
+                    label={formatCurrency(topHolder.totalInvested)}
+                    size="small"
+                    sx={{
+                      bgcolor: 'rgba(122, 62, 72, 0.08)',
+                      color: 'primary.main',
+                      fontWeight: 600,
+                      fontSize: '0.72rem',
+                      height: 22,
+                    }}
+                  />
+                </Box>
               )}
             </Paper>
 

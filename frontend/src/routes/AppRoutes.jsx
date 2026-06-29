@@ -17,6 +17,7 @@ import Portfolio from '../pages/Portfolio';
 import News from '../pages/News';
 import LearningHub from '../pages/LearningHub';
 import LessonPage from '../pages/LessonPage';
+import Transactions from '../pages/Transactions';
 import NotFound from '../pages/NotFound';
 
 import { ROUTES } from '../utils/constants';
@@ -50,6 +51,7 @@ function AppRoutes() {
           <Route path={ROUTES.NEWS} element={<News />} />
           <Route path={ROUTES.LEARN} element={<LearningHub />} />
           <Route path="/learn/:slug" element={<LessonPage />} />
+          <Route path={ROUTES.TRANSACTIONS} element={<Transactions />} />
         </Route>
 
         {/* 404 */}

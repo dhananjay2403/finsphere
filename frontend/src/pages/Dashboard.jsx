@@ -646,7 +646,16 @@ function Dashboard() {
         <Grid item xs={12} md={6}>
           <Paper
             elevation={0}
-            sx={{ p: 3, border: '1px solid', borderColor: 'divider', borderRadius: 2, bgcolor: 'white' }}
+            sx={{
+              p: 3,
+              border: '1px solid',
+              borderColor: 'divider',
+              borderRadius: 2,
+              bgcolor: 'white',
+              height: '100%',
+              display: 'flex',
+              flexDirection: 'column',
+            }}
           >
             <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 2 }}>
               <Box>
@@ -726,7 +735,16 @@ function Dashboard() {
         <Grid item xs={12} md={6}>
           <Paper
             elevation={0}
-            sx={{ p: 3, border: '1px solid', borderColor: 'divider', borderRadius: 2, bgcolor: 'white' }}
+            sx={{
+              p: 3,
+              border: '1px solid',
+              borderColor: 'divider',
+              borderRadius: 2,
+              bgcolor: 'white',
+              height: '100%',
+              display: 'flex',
+              flexDirection: 'column',
+            }}
           >
             <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 2 }}>
               <Box>
@@ -815,7 +833,7 @@ function Dashboard() {
             <Button
               size="small"
               endIcon={<ArrowForwardIcon sx={{ fontSize: 14 }} />}
-              onClick={() => navigate(ROUTES.TRADE)}
+              onClick={() => navigate(ROUTES.TRANSACTIONS)}
               sx={{ color: 'primary.main', fontWeight: 600, fontSize: '0.8rem', '&:hover': { bgcolor: 'rgba(122, 62, 72, 0.04)' } }}
             >
               View All

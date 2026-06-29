@@ -42,7 +42,7 @@ const fetchQuotes = async (holdings) => {
 // The function signature and the PortfolioSnapshot schema are the API
 // contract; the call-site changes; this function does not.
 // ---------------------------------------------------------------------------
-const takeSnapshot = async (userId, cashBalance, holdings, quoteResults) => {
+const takeSnapshot = async (userId, cashBalance, holdings, quoteResults, quotesSucceeded) => {
   // Sum current market value, falling back to cost price for failed quotes
   let marketValue = 0;
   holdings.forEach((h, i) => {
@@ -60,11 +60,33 @@ const takeSnapshot = async (userId, cashBalance, holdings, quoteResults) => {
   const today = new Date();
   today.setUTCHours(0, 0, 0, 0);
 
-  await PortfolioSnapshot.findOneAndUpdate(
-    { userId, date: today },
-    { totalValue, cashBalance },
-    { upsert: true, new: true, setDefaultsOnInsert: true }
-  );
+  // ---------------------------------------------------------------------------
+  // Critical: only overwrite today's snapshot when at least one live quote
+  // succeeded.  When ALL quotes failed (Finnhub rate-limit / outage), every
+  // holding falls back to avgCostPrice, making totalValue ≈ $100,000 — the
+  // initial balance — regardless of actual portfolio gains.
+  //
+  // Using $setOnInsert ensures that a degraded (all-fallback) value can only
+  // CREATE a new document; it will NEVER overwrite an accurate snapshot that
+  // was already written earlier the same day with real live prices.
+  // ---------------------------------------------------------------------------
+  if (quotesSucceeded) {
+    // At least one live price — safe to write the real market value
+    await PortfolioSnapshot.findOneAndUpdate(
+      { userId, date: today },
+      { $set: { totalValue, cashBalance } },
+      { upsert: true, new: true, setDefaultsOnInsert: true }
+    );
+  } else {
+    // All quotes failed — only write if no document exists yet for today
+    // (i.e. the user's very first snapshot of the day before any live price
+    // was available).  Never overwrite an accurate value.
+    await PortfolioSnapshot.findOneAndUpdate(
+      { userId, date: today },
+      { $setOnInsert: { totalValue, cashBalance } },
+      { upsert: true, new: true, setDefaultsOnInsert: true }
+    );
+  }
 };
 
 
@@ -239,13 +261,19 @@ const getSnapshots = async (req, res, next) => {
     if (holdings.length > 0) {
       const quoteResults = await fetchQuotes(holdings);
 
+      // Determine whether at least one live quote succeeded.
+      // This flag is forwarded to takeSnapshot so it can decide whether
+      // to do a full $set upsert (accurate data) or a safe $setOnInsert
+      // (degraded fallback — must not overwrite an accurate value).
+      const quotesSucceeded = quoteResults.some((r) => r.status === 'fulfilled');
+
       // Non-fatal: snapshot failure must never break the chart response
-      takeSnapshot(req.user._id, cashBalance, holdings, quoteResults).catch((snapErr) => {
+      takeSnapshot(req.user._id, cashBalance, holdings, quoteResults, quotesSucceeded).catch((snapErr) => {
         console.error('[portfolioController] snapshot write failed:', snapErr.message);
       });
     } else {
-      // No holdings — record cash-only snapshot so the chart starts immediately
-      takeSnapshot(req.user._id, cashBalance, [], []).catch((snapErr) => {
+      // No holdings — cash-only snapshot; no quotes to fetch, treated as succeeded
+      takeSnapshot(req.user._id, cashBalance, [], [], true).catch((snapErr) => {
         console.error('[portfolioController] snapshot write failed:', snapErr.message);
       });
     }

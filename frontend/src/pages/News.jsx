@@ -118,11 +118,54 @@ function NewsCard({ article }) {
               width: '100%',
               height: '100%',
               display: 'flex',
+              flexDirection: 'column',
               alignItems: 'center',
               justifyContent: 'center',
+              background: 'linear-gradient(135deg, #F0E9E2 0%, #E8DED5 50%, #D4C5BA 100%)',
+              gap: 0.75,
             }}
           >
-            <NewspaperIcon sx={{ fontSize: 36, color: '#E8DED5' }} />
+            {/* Source initial monogram */}
+            {article.source ? (
+              <Box
+                sx={{
+                  width: 44,
+                  height: 44,
+                  borderRadius: '50%',
+                  bgcolor: 'rgba(122, 62, 72, 0.15)',
+                  border: '1.5px solid rgba(122, 62, 72, 0.2)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                }}
+              >
+                <Typography
+                  sx={{
+                    fontSize: '1.1rem',
+                    fontWeight: 700,
+                    color: '#7A3E48',
+                    lineHeight: 1,
+                    userSelect: 'none',
+                  }}
+                >
+                  {article.source.charAt(0).toUpperCase()}
+                </Typography>
+              </Box>
+            ) : (
+              <NewspaperIcon sx={{ fontSize: 28, color: 'rgba(122, 62, 72, 0.4)' }} />
+            )}
+            <Typography
+              variant="caption"
+              sx={{
+                color: 'rgba(122, 62, 72, 0.5)',
+                fontSize: '0.6rem',
+                fontWeight: 500,
+                textTransform: 'uppercase',
+                letterSpacing: '0.06em',
+              }}
+            >
+              {article.source || 'News'}
+            </Typography>
           </Box>
         )}
 

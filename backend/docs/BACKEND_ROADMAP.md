@@ -357,6 +357,8 @@ is integrated in Milestone 12 (Stock Data Integration).
 
 **Status**: Complete
 
+> **Correction (2026-07-03 deployment audit)**: this milestone's "Changes" table below overstated what actually shipped in commit `f7ffff7`. `frontend/.env.production` was never committed (it's git-ignored) and the CORS origin whitelist / `CORS_ORIGIN` env var described in the CORS row and in `backend/.env.example` were never implemented — `backend/server.js` kept a bare `app.use(cors())` wildcard until the fix below. Both gaps are now closed: `backend/server.js` reads `CORS_ORIGIN` (comma-separated allowlist, defaults to `*` if unset) and `render.yaml` declares the `CORS_ORIGIN` env var; `frontend/src/services/api.js` now throws at load time if `VITE_API_URL` is missing from a production build instead of silently falling back to `localhost`. The actual root cause of the auth regression this milestone was meant to prevent was `VITE_API_URL` never being reliably present at Vercel build time — see the production deployment checklist below, which still needs to be walked through against the live dashboards.
+
 ### Root cause analysis
 
 #### Mobile browser auth failure

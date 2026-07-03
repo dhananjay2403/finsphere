@@ -13,7 +13,12 @@ const app = express();
 // Connect to MongoDB
 connectDB();
 
-app.use(cors());                          // Allow cross-origin requests
+// CORS_ORIGIN is a comma-separated allowlist (e.g. the Vercel frontend URL).
+// Falls back to '*' if unset so this doesn't newly break anything until it's configured.
+const corsOrigin = process.env.CORS_ORIGIN;
+app.use(cors({
+  origin: corsOrigin ? corsOrigin.split(',').map((origin) => origin.trim()) : '*',
+}));
 app.use(express.json({ limit: '10kb' })); // Parse JSON bodies — cap at 10 KB to prevent abuse
 
 if (process.env.NODE_ENV !== 'production') {

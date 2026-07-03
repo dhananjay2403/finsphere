@@ -1,9 +1,20 @@
 import axios from 'axios';
 import { LOCAL_STORAGE_KEYS } from '../utils/constants';
 
+const apiUrl = import.meta.env.VITE_API_URL;
+
+if (import.meta.env.PROD && !apiUrl) {
+  // A production build with no VITE_API_URL silently falls back to localhost,
+  // which resolves to the visitor's own machine — every request fails with no
+  // clear error. Fail loudly at load time instead so a missing env var shows
+  // up immediately rather than as a confusing "auth doesn't work" report.
+  throw new Error(
+    'VITE_API_URL is not set. Set it as an environment variable in the Vercel project settings and redeploy.'
+  );
+}
 
 const api = axios.create({
-  baseURL: import.meta.env.VITE_API_URL || 'http://localhost:5001/api',
+  baseURL: apiUrl || 'http://localhost:5001/api',
   headers: {
     'Content-Type': 'application/json',
   },

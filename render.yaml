@@ -16,6 +16,7 @@ services:
       # JWT_SECRET      — long random string (32+ chars)
       # JWT_EXPIRE      — e.g. 7d
       # FINNHUB_API_KEY — your Finnhub API key
+      # CORS_ORIGIN     — the deployed frontend URL (e.g. https://finsphere.vercel.app)
       - key: MONGO_URI
         sync: false
       - key: JWT_SECRET
@@ -23,4 +24,6 @@ services:
       - key: JWT_EXPIRE
         value: 7d
       - key: FINNHUB_API_KEY
+        sync: false
+      - key: CORS_ORIGIN
         sync: false

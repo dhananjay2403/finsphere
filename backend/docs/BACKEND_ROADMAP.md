@@ -949,3 +949,75 @@ style(ui): milestone 15I — center page headers; polish Transactions table; ref
 - LearningHub: centered title + difficulty filters
 - Trade: centered title + subtitle only
 ```
+
+---
+
+## Milestone 15K — Trade Engine Integrity & Atomic Transactions ✅
+
+**Status**: Complete
+
+### Root cause analysis
+
+A senior-engineer production review of this codebase identified three related defects in `backend/controllers/tradeController.js` that together undermined the trading app's core economy:
+
+- **Client-supplied execution price**: `buyStock`/`sellStock` read `pricePerShare` straight from `req.body` and used it verbatim for all money math. A client could buy at a fabricated low price and sell at a fabricated high price to mint unlimited virtual balance.
+- **Non-atomic writes**: balance mutation, holding mutation, and trade-record creation were three independent `await`s with no transaction. A failure partway through could leave money moved with no matching holding/trade record. The old buy-side "debit then manually compensate" rollback was not crash-safe — a process death between the two awaits would permanently lose money with no trade record.
+- **Concurrent-sell race**: `sellStock` did a non-atomic read-then-write on the `Holding` document — two concurrent sell requests could both pass the quantity check and both credit the balance before either write landed, double-crediting the user.
+
+### Implementation
+
+**1. Server-authoritative price (both buy and sell)** — the server now independently fetches the live price via `stockService.getQuote(symbolUpper)` *before* opening any database session, and treats it as the single source of truth for all money math. `pricePerShare` is still required by route validation (API contract unchanged) but is no longer read for computation. If a valid live quote cannot be obtained for any reason — unknown symbol, Finnhub rate limit, upstream outage, network failure, or a response that comes back "successful" but with no usable price (`Number.isFinite(quote.price) && quote.price > 0` guard) — the trade aborts with a `503` before any database write. No stale, cached, client-supplied, or fallback price is ever used to execute a trade.
+
+**2. Atomicity via `mongoose.startSession()` + `session.withTransaction()`** — every write (balance mutation, holding mutation, trade creation) for a single buy or sell now happens inside one MongoDB multi-document transaction. A business-logic failure (insufficient funds/shares, no holding) throws a plain `Error` with `.statusCode` set, which aborts the transaction and propagates unchanged through the existing `catch (err) { next(err) }` → `errorHandler.js` pattern — no new error-handling code was needed. Genuine transient write conflicts (`MongoError` with the `TransientTransactionError` label) are automatically retried by the driver's `withTransaction`.
+
+**3. Buy-side atomic conditional debit + atomic holding upsert** — the balance debit now uses `User.findOneAndUpdate({_id, balance: {$gte: totalAmount}}, {$inc: {balance: -totalAmount}})`, replacing the old unconditional-then-rollback pattern. The weighted-average holding upsert was converted to a single atomic pipeline-style `findOneAndUpdate` (`updatePipeline: true` — required by the installed Mongoose 9.7.2 to accept an aggregation-pipeline update) that both creates and recomputes the average in one conditional operation. This closes a race the initial design missed: two concurrent first-time buys of a brand-new symbol previously risked an `E11000` duplicate-key error on the unique `{userId, symbol}` index, since a plain read-then-write both requests would see "no existing holding" and both attempt `Holding.create`. The pipeline upsert eliminates this at the root instead of relying on retry.
+
+**4. Sell-side atomic conditional decrement — the core race fix** — `Holding.findOneAndUpdate({userId, symbol, quantity: {$gte: qty}}, {$inc: {quantity: -qty}})` replaces the read-then-write. This single guarded operation is what prevents two concurrent sells of the same holding from both passing a quantity check and both crediting the balance — MongoDB serializes the `$gte`-guarded update, so only requests with enough remaining shares succeed; the other gets an authoritative 404/400.
+
+### Files Modified
+
+| File | Change |
+|---|---|
+| `backend/controllers/tradeController.js` | Rewrote `buyStock` and `sellStock`: server-authoritative pricing, `mongoose.startSession()`/`withTransaction()` wrapping, atomic conditional balance debit/credit, atomic pipeline-style holding upsert (buy), atomic conditional holding decrement (sell). `getTradeHistory` unchanged. |
+| `backend/docs/BACKEND_ROADMAP.md` | This entry. |
+
+### No Changes
+
+| Area | Reason |
+|---|---|
+| `backend/routes/trades.js` | Validation rules unchanged — `pricePerShare` still required for API-contract compatibility, just no longer used for computation |
+| Models (`User`, `Holding`, `Trade`) | Existing schemas already support the fix |
+| `backend/services/stockService.js` | `getQuote` already normalizes errors with `.statusCode` set; a defensive `Number.isFinite` guard was added in the controller instead of here |
+| `backend/middleware/errorHandler.js` | Already respects `err.statusCode` — no new error-handling code needed |
+| Frontend | `tradeService.js` just reads whatever `trade.pricePerShare`/`totalAmount`/`cashBalance` come back — response shape is unchanged. The one behavioral difference: the displayed execution price may now differ slightly from what the UI showed at click-time, since it reflects the real server-executed price rather than a client-supplied one — this is the correct trade-off of real price integrity |
+| Portfolio calculations, snapshots, watchlist, stock endpoints | Out of scope for this milestone |
+
+### Testing Performed (local, against live Finnhub data via the demo account)
+
+1. **Price-integrity test**: bought AAPL with a fabricated `pricePerShare: 0.01` — executed at the real live quote ($308.63), not the fabricated value; balance debited correctly.
+2. **Sell price-integrity test**: sold AAPL with a fabricated `pricePerShare: 99999` — executed at the real live quote, not the inflated value; confirmed no cash was fabricated.
+3. **Insufficient funds** → `400`, same message shape as before.
+4. **Insufficient shares** → `400`, same message shape as before.
+5. **Sell with no holding** → `404`, same message shape as before.
+6. **Concurrent-sell race (the core bug)**: fired two simultaneous full-sell requests for the same holding. Exactly one succeeded (`201`, balance credited once, holding removed); the other correctly failed (`404`, holding already gone). Final balance was exact — no double-credit.
+7. **Concurrent first-time-buy race**: fired two simultaneous buy requests for a symbol not yet held. Both succeeded cleanly (`201`/`201`) with a correctly weighted-averaged 10-share holding — no `E11000`/500.
+8. **Market-data-unavailable test**: attempted to buy a nonexistent symbol. Aborted with `404` "No quote data found" before any session opened; balance and holdings unchanged — confirmed zero side effects on a failed quote fetch.
+
+One implementation bug was caught during this local testing (not by static review): Mongoose 9.7.2 requires an explicit `updatePipeline: true` option on `findOneAndUpdate` to accept an aggregation-pipeline (array) update — without it, the call threw `MongooseError: Cannot pass an array to query updates unless the updatePipeline option is set`. The transaction correctly rolled back the balance debit when this was hit, which incidentally also validated the rollback mechanism before the fix was applied.
+
+### Commit Message
+
+```
+fix(trades): server-authoritative pricing, atomic transactions, fix concurrent-sell race
+
+- buy/sell now fetch the live price via stockService.getQuote() and ignore
+  client-supplied pricePerShare for all money math; abort with 503 if a
+  valid quote can't be obtained (no stale/cached/fallback price is ever used)
+- wrap balance + holding + trade writes in a single mongoose transaction per
+  trade — replaces the non-crash-safe manual debit/rollback on buy
+- buy: atomic conditional balance debit ($gte guard) + atomic pipeline-style
+  holding upsert (closes an E11000 race on first-time buys of a new symbol)
+- sell: atomic conditional holding decrement ($gte guard) — the core fix for
+  the concurrent-sell double-credit race
+```
+```

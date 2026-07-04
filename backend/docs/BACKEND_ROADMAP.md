@@ -1208,3 +1208,60 @@ feat(docker): single-file compose stack with local MongoDB replica set
 - README/roadmap/.env.example updated to describe this single workflow
 - no changes to render.yaml, vercel.json, or any application code
 ```
+
+---
+
+## Milestone 18 — GitHub Actions CI ✅
+
+**Status**: Complete
+
+### Objective
+
+A minimal Continuous Integration pipeline that verifies the project installs and builds cleanly on every push and pull request. Deliberately scoped down — no tests, linting, Docker publishing, or deployment automation; those are out of scope by design, not oversight.
+
+### Design
+
+**One workflow, one job, six sequential steps** — checkout, set up Node, install backend deps, install frontend deps, build frontend. Verifying the backend "installs successfully" isn't a separate step: `npm ci`'s own exit code already is that verification, so a distinct check would just duplicate it.
+
+**Node 24, not the `>=18.0.0` in `engines`.** Both `package.json` files still say `>=18.0.0`, but `yahoo-finance2` actually requires `>=22` at runtime (surfaced during Milestone 17's Docker validation, where `node:20-alpine` logged a real compatibility warning). CI uses the same `node:24` version the Dockerfiles already settled on, rather than the stale `engines` floor.
+
+**Caching via `actions/setup-node`'s built-in `cache: npm` input**, keyed off both lockfiles via `cache-dependency-path`. This is the zero-extra-complexity way to cache — no custom cache action, no manual key management.
+
+### Files Modified
+
+| File | Change |
+|---|---|
+| `.github/workflows/ci.yml` (new) | Single CI workflow: checkout → setup Node 24 (npm-cached) → `npm ci` (backend) → `npm ci` (frontend) → `npm run build` (frontend) |
+| `README.md` | New concise "Continuous Integration" section; CI status badge added next to the existing tech badges; refined the stale "CI/CD" Future Improvements bullet into separate "testing/linting" and "CD" entries, since build-verification CI now exists |
+
+### No Changes
+
+| Area | Reason |
+|---|---|
+| Application code | Not touched — this milestone is pipeline configuration only |
+| `render.yaml`, `vercel.json` | Deployment is explicitly out of scope for this milestone |
+| Backend/frontend `engines` fields | Left as-is; CI pins its own Node version independently rather than reading a stale field |
+
+### Testing Performed
+
+Ran the exact commands the workflow executes, locally: `npm ci` in `backend/` (exit 0), `npm ci` in `frontend/` (exit 0), `npm run build` in `frontend/` (exit 0, produced `dist/`). YAML syntax validated with a parser before committing.
+
+### How To Test On GitHub
+
+Push this branch (or open a PR) — the workflow runs automatically under the repo's **Actions** tab. To see it fail on purpose: introduce a syntax error in any frontend file (breaks the build step), or delete a character from `frontend/package.json`/`backend/package.json` (breaks `npm ci`'s JSON parse) — then revert once you've seen the red ✗.
+
+### Commit Message
+
+```
+ci: add minimal GitHub Actions pipeline (install + build verification)
+
+- .github/workflows/ci.yml: single job, runs on push and pull_request —
+  checkout, Node 24 setup (matches yahoo-finance2's >=22 requirement and the
+  Dockerfiles), npm ci for backend and frontend, npm run build for frontend
+- npm cache enabled via actions/setup-node's built-in cache input, keyed off
+  both package-lock.json files
+- no tests, linting, Docker publishing, or deployment automation — scoped to
+  install/build verification only, by design
+- README: concise CI section + status badge; split the stale "CI/CD" future
+  improvement into what's actually still missing (tests/linting, CD)
+```

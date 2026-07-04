@@ -8,7 +8,7 @@
 
 Trade live-priced stocks on a virtual $100,000 balance with a real portfolio dashboard, charts, news, and a financial-literacy curriculum — every trade executes at a server-verified price inside an atomic transaction, engineered like a real brokerage, not a toy.
 
-![Node.js](https://img.shields.io/badge/Node.js-339933?logo=node.js&logoColor=white) ![React](https://img.shields.io/badge/React-18-61DAFB?logo=react&logoColor=white) ![Express](https://img.shields.io/badge/Express-5-000000?logo=express&logoColor=white) ![MongoDB](https://img.shields.io/badge/MongoDB-Atlas-47A248?logo=mongodb&logoColor=white) ![Deployed](https://img.shields.io/badge/Deployed-Vercel%20%2B%20Render-000000?logo=vercel&logoColor=white)
+![CI](https://github.com/dhananjay2403/finsphere/actions/workflows/ci.yml/badge.svg) ![Node.js](https://img.shields.io/badge/Node.js-339933?logo=node.js&logoColor=white) ![React](https://img.shields.io/badge/React-18-61DAFB?logo=react&logoColor=white) ![Express](https://img.shields.io/badge/Express-5-000000?logo=express&logoColor=white) ![MongoDB](https://img.shields.io/badge/MongoDB-Atlas-47A248?logo=mongodb&logoColor=white) ![Deployed](https://img.shields.io/badge/Deployed-Vercel%20%2B%20Render-000000?logo=vercel&logoColor=white)
 
 ---
 
@@ -168,6 +168,12 @@ docker run -p 3000:3000 finsphere-frontend
 
 ---
 
+## Continuous Integration
+
+A GitHub Actions workflow (`.github/workflows/ci.yml`) runs on every push and pull request: installs backend and frontend dependencies, then builds the frontend. It only verifies the project installs and builds cleanly — no tests, linting, or deployment are part of this pipeline.
+
+---
+
 ## Performance
 
 Public market-data endpoints (quotes, historical candles, market news) are cached in Redis using the **cache-aside** pattern: a request is served straight from Redis on a hit, and only falls through to the Finnhub/Yahoo API on a miss, storing the result before returning it. If Redis is unavailable the app degrades gracefully and calls the upstream API directly, exactly as it did before caching.
@@ -227,6 +233,7 @@ finsphere/
 
 ## Future Improvements
 
-- **CI/CD** — automated linting, tests, and build verification on every push
+- **Testing & linting in CI** — the current pipeline only verifies install/build; no automated tests or linting yet
+- **CD** — automated deployment on every merge to `main`
 - **Paper trading competitions** — leaderboards and time-boxed trading challenges between users
 - **Portfolio snapshots** — richer historical performance tracking beyond the current daily snapshot

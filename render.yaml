@@ -17,6 +17,8 @@ services:
       # JWT_EXPIRE      — e.g. 7d
       # FINNHUB_API_KEY — your Finnhub API key
       # CORS_ORIGIN     — the deployed frontend URL (e.g. https://finsphere.vercel.app)
+      # REDIS_URL       — optional; a hosted Redis connection string (Render Key Value,
+      #                   Upstash, Redis Cloud, etc). Caching is skipped gracefully if unset.
       - key: MONGO_URI
         sync: false
       - key: JWT_SECRET
@@ -26,4 +28,6 @@ services:
       - key: FINNHUB_API_KEY
         sync: false
       - key: CORS_ORIGIN
+        sync: false
+      - key: REDIS_URL
         sync: false

@@ -20,7 +20,9 @@ const buyStock = async (req, res, next) => {
     const symbolUpper = symbol.trim().toUpperCase();
     const qty = Number(quantity);
 
-    const quote = await stockService.getQuote(symbolUpper);
+    // skipCache: trade execution must always price off a live Finnhub call,
+    // never a cached quote — see Milestone 16.
+    const quote = await stockService.getQuote(symbolUpper, { skipCache: true });
 
     if (!Number.isFinite(quote?.price) || quote.price <= 0) {
       const err = new Error(`Market data temporarily unavailable for ${symbolUpper} — please try again shortly.`);
@@ -145,7 +147,9 @@ const sellStock = async (req, res, next) => {
     const symbolUpper = symbol.trim().toUpperCase();
     const qty = Number(quantity);
 
-    const quote = await stockService.getQuote(symbolUpper);
+    // skipCache: trade execution must always price off a live Finnhub call,
+    // never a cached quote — see Milestone 16.
+    const quote = await stockService.getQuote(symbolUpper, { skipCache: true });
 
     if (!Number.isFinite(quote?.price) || quote.price <= 0) {
       const err = new Error(`Market data temporarily unavailable for ${symbolUpper} — please try again shortly.`);

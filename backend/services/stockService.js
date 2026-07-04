@@ -2,6 +2,7 @@ const axios = require('axios');
 // yahoo-finance2 v3: default export is the class — must instantiate before use
 const YahooFinanceClass = require('yahoo-finance2').default;
 const yahooFinance = new YahooFinanceClass();
+const { cacheAside } = require('../config/redis');
 
 // All Finnhub communication lives here — controllers never touch axios or
 // Finnhub directly, so swapping providers later only means changing this
@@ -9,6 +10,13 @@ const yahooFinance = new YahooFinanceClass();
 // controller's try/catch forward it to the global error handler.
 
 const BASE_URL = 'https://finnhub.io/api/v1';
+
+// Cache TTLs for public market data (quotes, candles, news) — see
+// Milestone 16 for reasoning. Redis is a pure optimisation layer here:
+// cacheAside() degrades to an uncached call if Redis is unreachable.
+const QUOTE_TTL_SECONDS = 10;    // prices move fast — just enough to collapse request bursts
+const CANDLE_TTL_SECONDS = 300;  // 5 min — closed historical bars barely change within a session
+const NEWS_TTL_SECONDS = 120;    // 2 min — headlines don't update second-to-second
 
 // Resolved once at module load — fails fast if the key is missing
 const API_KEY = process.env.FINNHUB_API_KEY;
@@ -55,10 +63,27 @@ const callFinnhub = async (endpoint, params = {}) => {
         throw rateErr;
       }
 
-      if (status === 401 || status === 403) {
+      // 401 is the only status that actually means the key is bad or missing.
+      if (status === 401) {
         const authErr = new Error('Invalid or missing Finnhub API key');
         authErr.statusCode = 502;
         throw authErr;
+      }
+
+      // 403 means the key is valid but the current Finnhub plan doesn't cover
+      // this resource — typically a non-US symbol/exchange on the free tier
+      // (e.g. IVSO.ST). This is NOT an auth failure; reporting it as a bad key
+      // wrongly blames the key. Surface it as "not available" instead, and use
+      // a non-401 status so the frontend's 401 interceptor doesn't log the user
+      // out for simply viewing an unsupported symbol.
+      if (status === 403) {
+        const accessErr = new Error(
+          params.symbol
+            ? `Market data for ${params.symbol} is not available on the current Finnhub plan`
+            : 'This market data is not available on the current Finnhub plan'
+        );
+        accessErr.statusCode = 403;
+        throw accessErr;
       }
 
       const upstreamErr = new Error(`Finnhub error: ${message}`);
@@ -81,28 +106,39 @@ const callFinnhub = async (endpoint, params = {}) => {
 
 // Live quote for a symbol — Finnhub's single-letter fields (c, d, dp...)
 // get renamed to something readable below.
-const getQuote = async (symbol) => {
+//
+// { skipCache: true } bypasses Redis entirely and always hits Finnhub live —
+// used by trade execution (tradeController.buyStock/sellStock), which must
+// never price a buy/sell off a value that could be a few seconds stale.
+const getQuote = async (symbol, { skipCache = false } = {}) => {
+  const symbolUpper = symbol.toUpperCase();
 
-  const data = await callFinnhub('/quote', { symbol: symbol.toUpperCase() });
+  const fetchQuote = async () => {
+    const data = await callFinnhub('/quote', { symbol: symbolUpper });
 
-  // Finnhub returns { c: 0, ... } for unknown symbols — detect and reject
-  if (!data || data.c === 0) {
-    const err = new Error(`No quote data found for symbol: ${symbol.toUpperCase()}`);
-    err.statusCode = 404;
-    throw err;
-  }
+    // Finnhub returns { c: 0, ... } for unknown symbols — detect and reject
+    if (!data || data.c === 0) {
+      const err = new Error(`No quote data found for symbol: ${symbolUpper}`);
+      err.statusCode = 404;
+      throw err;
+    }
 
-  return {
-    symbol: symbol.toUpperCase(),
-    price: data.c,   // current price
-    change: data.d,   // day change (absolute)
-    changePercent: data.dp,  // day change (%)
-    high: data.h,   // day high
-    low: data.l,   // day low
-    open: data.o,   // day open
-    previousClose: data.pc,  // previous close
-    timestamp: data.t,   // unix timestamp of last trade
+    return {
+      symbol: symbolUpper,
+      price: data.c,   // current price
+      change: data.d,   // day change (absolute)
+      changePercent: data.dp,  // day change (%)
+      high: data.h,   // day high
+      low: data.l,   // day low
+      open: data.o,   // day open
+      previousClose: data.pc,  // previous close
+      timestamp: data.t,   // unix timestamp of last trade
+    };
   };
+
+  if (skipCache) return fetchQuote();
+
+  return cacheAside(`fs:quote:${symbolUpper}`, QUOTE_TTL_SECONDS, fetchQuote);
 };
 
 
@@ -161,33 +197,38 @@ const searchSymbols = async (query) => {
 
 // Recent company news, last 7 days.
 const getNews = async (symbol) => {
+  const symbolUpper = symbol.toUpperCase();
 
-  // Build a 7-day date window (Finnhub free tier: last 30 days max)
-  const to = new Date();
-  const from = new Date();
-  from.setDate(from.getDate() - 7);
+  const fetchNews = async () => {
+    // Build a 7-day date window (Finnhub free tier: last 30 days max)
+    const to = new Date();
+    const from = new Date();
+    from.setDate(from.getDate() - 7);
 
-  const fmt = (d) => d.toISOString().split('T')[0]; // YYYY-MM-DD
+    const fmt = (d) => d.toISOString().split('T')[0]; // YYYY-MM-DD
 
-  const data = await callFinnhub('/company-news', {
-    symbol: symbol.toUpperCase(),
-    from: fmt(from),
-    to: fmt(to),
-  });
+    const data = await callFinnhub('/company-news', {
+      symbol: symbolUpper,
+      from: fmt(from),
+      to: fmt(to),
+    });
 
-  if (!Array.isArray(data)) return [];
+    if (!Array.isArray(data)) return [];
 
-  return data
-    .slice(0, 20) // Cap at 20 articles
-    .map((article) => ({
-      id: article.id,
-      headline: article.headline,
-      source: article.source,
-      url: article.url,
-      summary: article.summary,
-      datetime: article.datetime, // Unix timestamp
-      image: article.image || null,
-    }));
+    return data
+      .slice(0, 20) // Cap at 20 articles
+      .map((article) => ({
+        id: article.id,
+        headline: article.headline,
+        source: article.source,
+        url: article.url,
+        summary: article.summary,
+        datetime: article.datetime, // Unix timestamp
+        image: article.image || null,
+      }));
+  };
+
+  return cacheAside(`fs:news:symbol:${symbolUpper}`, NEWS_TTL_SECONDS, fetchNews);
 };
 
 
@@ -196,6 +237,7 @@ const getNews = async (symbol) => {
 // Finance instead (free, no key needed) and maps Finnhub-style resolution
 // strings onto Yahoo's interval format below.
 const getCandles = async (symbol, resolution = 'D', from, to) => {
+  const symbolUpper = symbol.toUpperCase();
 
   const now   = Math.floor(Date.now() / 1000);
   const oneYearAgo = now - 365 * 24 * 60 * 60;
@@ -203,72 +245,83 @@ const getCandles = async (symbol, resolution = 'D', from, to) => {
   const toTs   = to   ? Number(to)   : now;
   const fromTs = from ? Number(from) : oneYearAgo;
 
-  // Finnhub resolution string → Yahoo Finance interval
-  const intervalMap = {
-    '1':  '1m',
-    '5':  '5m',
-    '15': '15m',
-    '30': '30m',
-    '60': '60m',
-    'D':  '1d',
-    'W':  '1wk',
-    'M':  '1mo',
-  };
-  const interval = intervalMap[resolution] || '1d';
+  // Rounded to the nearest minute for the cache key only — the frontend
+  // passes `to = now` on every chart load, so without rounding, near-
+  // identical requests a few seconds apart would never share a cache entry.
+  const roundedFrom = Math.floor(fromTs / 60) * 60;
+  const roundedTo   = Math.floor(toTs   / 60) * 60;
+  const cacheKey = `fs:candles:${symbolUpper}:${resolution}:${roundedFrom}:${roundedTo}`;
 
-  try {
-    const result = await yahooFinance.chart(symbol.toUpperCase(), {
-      period1:  new Date(fromTs * 1000),
-      period2:  new Date(toTs   * 1000),
-      interval,
-    }, {
-      // Suppress yahoo-finance2 validation warnings that appear for some symbols
-      validateResult: false,
-    });
-
-    const quotes = result?.quotes ?? [];
-
-    if (quotes.length === 0) {
-      const err = new Error(`No candle data for ${symbol.toUpperCase()} at resolution "${resolution}"`);
-      err.statusCode = 404;
-      throw err;
-    }
-
-    // Normalise to the same shape the rest of the codebase expects
-    const candles = quotes
-      .filter((q) => q.close !== null && q.close !== undefined)
-      .map((q) => ({
-        time:   Math.floor(new Date(q.date).getTime() / 1000), // Unix seconds
-        open:   q.open,
-        high:   q.high,
-        low:    q.low,
-        close:  q.close,
-        volume: q.volume ?? 0,
-      }));
-
-    if (candles.length === 0) {
-      const err = new Error(`No valid candle data for ${symbol.toUpperCase()}`);
-      err.statusCode = 404;
-      throw err;
-    }
-
-    return {
-      symbol:     symbol.toUpperCase(),
-      resolution,
-      status:     'ok',
-      candles,
+  const fetchCandles = async () => {
+    // Finnhub resolution string → Yahoo Finance interval
+    const intervalMap = {
+      '1':  '1m',
+      '5':  '5m',
+      '15': '15m',
+      '30': '30m',
+      '60': '60m',
+      'D':  '1d',
+      'W':  '1wk',
+      'M':  '1mo',
     };
+    const interval = intervalMap[resolution] || '1d';
 
-  } catch (err) {
-    // Re-throw errors we already formatted
-    if (err.statusCode) throw err;
+    try {
+      const result = await yahooFinance.chart(symbolUpper, {
+        period1:  new Date(fromTs * 1000),
+        period2:  new Date(toTs   * 1000),
+        interval,
+      }, {
+        // Suppress yahoo-finance2 validation warnings that appear for some symbols
+        validateResult: false,
+      });
 
-    // Yahoo Finance errors (network, unknown symbol, etc.)
-    console.error(`[stockService] getCandles failed for ${symbol}:`, err.message);
-    const fetchErr = new Error(`Chart data unavailable for ${symbol.toUpperCase()} — ${err.message}`);
-    fetchErr.statusCode = 502;
-    throw fetchErr;
-  }
+      const quotes = result?.quotes ?? [];
+
+      if (quotes.length === 0) {
+        const err = new Error(`No candle data for ${symbolUpper} at resolution "${resolution}"`);
+        err.statusCode = 404;
+        throw err;
+      }
+
+      // Normalise to the same shape the rest of the codebase expects
+      const candles = quotes
+        .filter((q) => q.close !== null && q.close !== undefined)
+        .map((q) => ({
+          time:   Math.floor(new Date(q.date).getTime() / 1000), // Unix seconds
+          open:   q.open,
+          high:   q.high,
+          low:    q.low,
+          close:  q.close,
+          volume: q.volume ?? 0,
+        }));
+
+      if (candles.length === 0) {
+        const err = new Error(`No valid candle data for ${symbolUpper}`);
+        err.statusCode = 404;
+        throw err;
+      }
+
+      return {
+        symbol:     symbolUpper,
+        resolution,
+        status:     'ok',
+        candles,
+      };
+
+    } catch (err) {
+      // Re-throw errors we already formatted
+      if (err.statusCode) throw err;
+
+      // Yahoo Finance errors (network, unknown symbol, etc.)
+      console.error(`[stockService] getCandles failed for ${symbolUpper}:`, err.message);
+      const fetchErr = new Error(`Chart data unavailable for ${symbolUpper} — ${err.message}`);
+      fetchErr.statusCode = 502;
+      throw fetchErr;
+    }
+  };
+
+  return cacheAside(cacheKey, CANDLE_TTL_SECONDS, fetchCandles);
 };
 
 
@@ -277,23 +330,27 @@ const getCandles = async (symbol, resolution = 'D', from, to) => {
 // "forex", "crypto", or "merger".
 const getMarketNews = async (category = 'general') => {
 
-  const data = await callFinnhub('/news', { category });
+  const fetchMarketNews = async () => {
+    const data = await callFinnhub('/news', { category });
 
-  if (!Array.isArray(data)) return [];
+    if (!Array.isArray(data)) return [];
 
-  return data
-    .filter((article) => article.headline && article.url)    // Skip empty articles
-    .slice(0, 30)                                             // Cap at 30 articles
-    .map((article) => ({
-      id:       article.id,
-      headline: article.headline,
-      source:   article.source,
-      url:      article.url,
-      summary:  article.summary   || '',
-      datetime: article.datetime,  // Unix timestamp (seconds)
-      image:    article.image      || null,
-      category: article.category  || category,
-    }));
+    return data
+      .filter((article) => article.headline && article.url)    // Skip empty articles
+      .slice(0, 30)                                             // Cap at 30 articles
+      .map((article) => ({
+        id:       article.id,
+        headline: article.headline,
+        source:   article.source,
+        url:      article.url,
+        summary:  article.summary   || '',
+        datetime: article.datetime,  // Unix timestamp (seconds)
+        image:    article.image      || null,
+        category: article.category  || category,
+      }));
+  };
+
+  return cacheAside(`fs:news:market:${category}`, NEWS_TTL_SECONDS, fetchMarketNews);
 };
 
 

@@ -91,6 +91,7 @@ The frontend runs at `http://localhost:3000` and proxies `/api` requests to the 
 | `JWT_EXPIRE` | No (default `7d`) | Token lifetime |
 | `FINNHUB_API_KEY` | **Yes** | [Free Finnhub API key](https://finnhub.io/) |
 | `CORS_ORIGIN` | No (default: all origins) | Comma-separated allowed origins in production |
+| `REDIS_URL` | No | Caches quotes/candles/news to reduce Finnhub calls. Omit to run without a cache — the app degrades gracefully |
 
 **`frontend/.env`**
 
@@ -105,6 +106,31 @@ The frontend runs at `http://localhost:3000` and proxies `/api` requests to the 
 - **Frontend** — Vercel, deployed from `frontend/` (`vercel.json` handles SPA routing); `VITE_API_URL` set as a build-time environment variable
 - **Backend** — Render, defined by `render.yaml`; secrets (`MONGO_URI`, `JWT_SECRET`, `FINNHUB_API_KEY`, `CORS_ORIGIN`) set in the dashboard
 - **Database** — MongoDB Atlas
+- **Cache** — Redis (optional); any provider that gives a connection string works (Render Key Value, Upstash, Redis Cloud). Set `REDIS_URL` in the dashboard — omit it and the backend runs uncached
+
+---
+
+## Performance
+
+Public market-data endpoints (quotes, historical candles, market news) are cached in Redis using the **cache-aside** pattern: a request is served straight from Redis on a hit, and only falls through to the Finnhub/Yahoo API on a miss, storing the result before returning it. If Redis is unavailable the app degrades gracefully and calls the upstream API directly, exactly as it did before caching.
+
+Measured over 30 Postman Runner iterations per endpoint (first iteration = cache miss, remainder = cache hits):
+
+| Endpoint | Cache miss (live API) | Cache hit (Redis) | Reduction |
+|---|---|---|---|
+| Stock quote | 431 ms | 51 ms | **88.1%** |
+| Historical candles | 538 ms | 37 ms | **93.1%** |
+| Market news | 429 ms | 37.3 ms | **91.3%** |
+
+Each data type uses a TTL tuned to how fast it changes:
+
+| Data | TTL | Rationale |
+|---|---|---|
+| Quotes | 10 seconds | Prices move fast; a short TTL keeps them fresh while collapsing bursts of duplicate lookups (e.g. the dashboard re-pricing every holding on load) into a single API call |
+| Historical candles | 5 minutes | Closed historical bars barely change within a session |
+| Market news | 2 minutes | Headlines don't update second to second |
+
+**Trade execution intentionally bypasses Redis** — every buy and sell fetches a fresh, live Finnhub price at execution time, so an order is never filled against a cached (potentially stale) price. Caching is applied only to read-only market data displayed in the UI.
 
 ---
 
@@ -116,7 +142,7 @@ finsphere/
 ├── backend/
 │   ├── app.js               # Express app (routes, middleware) — no listen/DB connect
 │   ├── server.js             # Boots app.js: connects DB, starts listening
-│   ├── config/               # Database connection
+│   ├── config/               # Database and Redis connections
 │   ├── controllers/          # Request handlers / business logic
 │   ├── middleware/           # Auth, validation, error handling
 │   ├── models/                # Mongoose schemas
@@ -140,7 +166,6 @@ finsphere/
 
 ## Future Improvements
 
-- **Redis caching** — cache live quote lookups to reduce external API calls and improve response time under load
 - **Docker** — containerize both services for consistent local and CI environments
 - **CI/CD** — automated linting, tests, and build verification on every push
 - **Paper trading competitions** — leaderboards and time-boxed trading challenges between users

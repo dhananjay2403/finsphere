@@ -1049,3 +1049,84 @@ revert: remove automated testing infrastructure, keep app.js/server.js split
   independent of testing
 - no production runtime behavior changes
 ```
+
+---
+
+## Milestone 16 — Redis Caching for Public Market Data ✅
+
+**Status**: Complete
+
+### Objective
+
+An architecture review ahead of this milestone confirmed every quote/candle/news lookup hit Finnhub (or Yahoo, for candles) live on every request, with no caching anywhere in the stack — the Dashboard alone fires holdings + summary + snapshots in parallel on every mount, each independently re-quoting every symbol a user holds. The goal was to insert Redis as a pure optimization layer to cut Finnhub usage and improve response time, without changing any HTTP API contract and without weakening the trade-engine correctness guarantees from M15K (server-authoritative, always-live pricing at trade execution).
+
+Scope was deliberately narrow: cache only public, symbol-keyed market data (quotes, candles, news). Auth, balances, holdings, portfolio summaries, trades, and watchlists were left untouched — they continue to read directly from MongoDB.
+
+### Design
+
+**Standard single-key cache-aside**, implemented as one reusable helper, `cacheAside(key, ttlSeconds, fetchFn)`, in a new `backend/config/redis.js` module: `GET` the key — on a hit, return it immediately (no upstream call at all); on a miss, call the real Finnhub/Yahoo function, `SET` the result with a TTL, and return it. A two-tier fresh/stale design (letting a request serve a stale value if Finnhub fails *after* the entry's TTL lapsed) was considered and intentionally dropped in favor of this simpler single-tier version — within the TTL window Finnhub is never called at all, which already absorbs the vast majority of transient upstream blips; once a key expires, behavior reverts to exactly what it was before this milestone (a live call that can fail), which is consistent with Redis being a pure optimization layer rather than a new uptime guarantee.
+
+**Graceful degradation is structural, not bolted on.** The low-level `cacheGet`/`cacheSet` helpers catch every Redis error internally and return `null`/no-op; `cacheAside()` treats "Redis down" and "real cache miss" identically. If `REDIS_URL` is unset, the client is never created at all and the app behaves exactly as it did before this milestone.
+
+**Trade execution stays live.** `stockService.getQuote(symbol, { skipCache })` accepts an options object; `tradeController.buyStock`/`sellStock` pass `{ skipCache: true }` at both call sites so a buy/sell always prices off a live Finnhub call, never a cached value — preserving the M15K anti-staleness guarantee exactly. Every other caller (portfolio reads, the `/api/stocks/quote` route, the dashboard) gets the cached path.
+
+**Cache keys** (all prefixed `fs:` in case the Redis instance is ever shared):
+- `fs:quote:{SYMBOL}` — TTL 10s. Prices move within seconds, but 10s is enough to collapse the Dashboard's own parallel holdings/summary/snapshot burst into a single Finnhub call.
+- `fs:candles:{SYMBOL}:{RESOLUTION}:{roundedFrom}:{roundedTo}` — TTL 5 min. `from`/`to` are rounded down to the nearest 60s for the key only (the real Yahoo call still uses the exact values) — the frontend passes `to = now` on every chart load, so without rounding, near-identical requests a few seconds apart would never share a cache entry.
+- `fs:news:market:{CATEGORY}` / `fs:news:symbol:{SYMBOL}` — TTL 2 min. Headlines don't update second-to-second.
+
+`getProfile` and `searchSymbols` were left uncached — explicitly out of scope.
+
+**Client**: `ioredis`, chosen over `node-redis` because it emits connection errors as events rather than throwing and has a built-in reconnect/backoff strategy out of the box, which pairs naturally with the graceful-degradation requirement. Configured with `enableOfflineQueue: false` and `maxRetriesPerRequest: 1` so a down/reconnecting Redis fails a single command fast instead of queueing or blocking the request.
+
+### Files Modified
+
+| File | Change |
+|---|---|
+| `backend/config/redis.js` (new) | ioredis client (created only if `REDIS_URL` is set), `cacheGet`/`cacheSet` (swallow all Redis errors, return `null`/no-op), `cacheAside(key, ttlSeconds, fetchFn)`, `disconnect()` for graceful shutdown |
+| `backend/services/stockService.js` | Wrapped `getQuote`, `getCandles`, `getMarketNews`, `getNews` with `cacheAside`; added `{ skipCache }` option to `getQuote` |
+| `backend/controllers/tradeController.js` | `buyStock`/`sellStock` now call `stockService.getQuote(symbolUpper, { skipCache: true })` — the only change in this file |
+| `backend/server.js` | Graceful shutdown now also disconnects the Redis client alongside the existing Mongo connection close |
+| `backend/package.json` | Added `ioredis` dependency |
+| `backend/.env.example` | Documented `REDIS_URL` (optional) |
+| `render.yaml` | Added `REDIS_URL` as an optional dashboard-set secret |
+
+### No Changes
+
+| Area | Reason |
+|---|---|
+| `backend/controllers/portfolioController.js` | Already calls `stockService.getQuote()` — caching is transparent to it, no code change needed |
+| `backend/controllers/stocksController.js` | Already calls into `stockService` — same reasoning |
+| HTTP routes / response shapes | No API contract changes anywhere in this milestone |
+| `getProfile`, `searchSymbols` | Explicitly out of scope per milestone brief |
+| Frontend | No changes — caching is entirely a backend/service-layer concern |
+
+### Testing Performed (local, against live Finnhub/Yahoo data)
+
+1. **Cache hit/miss — quotes**: `GET /api/stocks/quote/AAPL` twice in a row. First request 780ms (live Finnhub call, `fs:quote:AAPL` created with TTL 10); second request 54ms, identical response body — confirmed cache hit.
+2. **Cache hit/miss — candles**: `GET /api/stocks/history/AAPL` twice. First request 1.55s (live Yahoo call); second request 29ms.
+3. **Cache hit/miss — market news**: `GET /api/stocks/market-news?category=general` twice. First request 560ms; second request 29ms.
+4. **Graceful degradation**: stopped Redis mid-session, repeated a quote request — no crash, request still succeeded (539ms, live Finnhub call), server and `/api/health` stayed up throughout. Restarted Redis — ioredis auto-reconnected on its own (`✓ Redis connected` logged again) and caching resumed immediately, no restart needed.
+5. **Trade-execution cache bypass**: warmed the quote cache for a symbol (confirmed fast follow-up read, ~30ms), then immediately placed a buy — the trade's internal price fetch took 530ms (live-call latency, not cache-hit latency), confirming `skipCache: true` correctly bypasses the cache even when a fresh entry exists. Repeated for sell with the same result. Both trades executed correctly (server-authoritative price used, client-supplied `pricePerShare` ignored, balance debited/credited correctly) — no regression to M15K behavior.
+
+### Local & Production Setup
+
+**Local**: install Redis (`brew install redis` on macOS, or run it via Docker: `docker run -p 6379:6379 redis`), start it (`brew services start redis` to run as a persistent background service, or `redis-server` directly), and set `REDIS_URL=redis://localhost:6379` in `backend/.env`. The app runs fine with this line commented out/absent too — caching is simply skipped.
+
+**Production (Render)**: provision a Redis instance from any provider that gives a connection string — Render's own "Key Value" offering, Upstash, or Redis Cloud all work — and set `REDIS_URL` in the Render dashboard (declared as an optional `sync: false` secret in `render.yaml`). TLS endpoints (`rediss://`) are supported automatically by `ioredis`'s URL parsing, no extra config needed.
+
+### Commit Message
+
+```
+perf(stocks): add Redis cache-aside for quotes, candles, and market news
+
+- new backend/config/redis.js: ioredis client + cacheGet/cacheSet/cacheAside,
+  all degrade gracefully to a no-op if REDIS_URL is unset or Redis is down
+- stockService.getQuote/getCandles/getMarketNews/getNews wrapped in
+  cache-aside (TTLs: quotes 10s, candles 5min, news 2min)
+- getQuote accepts { skipCache }; tradeController buy/sell pass skipCache:
+  true so trade execution always prices off a live Finnhub call, preserving
+  the M15K anti-staleness guarantee
+- add ioredis dependency; document REDIS_URL in .env.example and render.yaml
+- no API contract changes; app behavior is unchanged when Redis is absent
+```

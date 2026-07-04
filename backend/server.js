@@ -2,6 +2,7 @@ const mongoose = require('mongoose');
 
 const app = require('./app');
 const connectDB = require('./config/db');
+const redis = require('./config/redis');
 
 connectDB();
 
@@ -15,7 +16,10 @@ const server = app.listen(PORT, '0.0.0.0', () => {
 const shutdown = (signal) => {
   console.log(`\n${signal} received — shutting down gracefully`);
   server.close(() => {
-    mongoose.connection.close(false).then(() => {
+    Promise.all([
+      mongoose.connection.close(false),
+      redis.disconnect(),
+    ]).then(() => {
       console.log('✓ MongoDB connection closed');
       process.exit(0);
     });

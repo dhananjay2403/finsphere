@@ -1,0 +1,23 @@
+node_modules
+npm-debug.log*
+
+# Secrets — never bake these into an image; passed in at runtime instead
+.env
+.env.*
+!.env.example
+
+.git
+.gitignore
+
+# Editor/OS
+.vscode
+.idea
+.DS_Store
+
+# Docs and local-only artifacts not needed inside the image
+docs
+benchmarks
+*.md
+
+Dockerfile
+.dockerignore

@@ -1130,3 +1130,81 @@ perf(stocks): add Redis cache-aside for quotes, candles, and market news
 - add ioredis dependency; document REDIS_URL in .env.example and render.yaml
 - no API contract changes; app behavior is unchanged when Redis is absent
 ```
+
+---
+
+## Milestone 17 — Dockerization ✅
+
+**Status**: Complete
+
+### Objective
+
+Containerize the full stack (frontend, backend, Redis, MongoDB) for local development in one simple, self-contained workflow — `docker compose up`, nothing else — without touching how Render and Vercel deploy in production.
+
+### Design
+
+**Multi-stage Dockerfiles, `dev` target used by Compose.** Both `backend/Dockerfile` and `frontend/Dockerfile` build a `dev` stage (full dependencies, source bind-mounted at runtime so nodemon/Vite hot-reload without a rebuild) and a separate `production` stage (prod dependencies only, non-root `node` user, exec-form `CMD` so the process is PID 1 and receives `SIGTERM` directly — required for `server.js`'s graceful-shutdown handler to actually run). The `production` target isn't used by Render or Vercel today; it exists for anyone who later wants to self-host outside of Compose. `node:24-alpine` matches `yahoo-finance2`'s `>=22` runtime requirement and the host's own Node version.
+
+**One `docker-compose.yml`, four services, always defined.** `frontend`, `backend`, `redis`, and `mongo` all start on a plain `docker compose up` — no override files, profiles, or extra flags. A two-file (base + override) design was built and validated first, but rejected in favor of this: one file is simpler to read and reason about, even though it means the `mongo` container always starts, including for developers who end up pointing at Atlas instead (see below).
+
+**MongoDB Atlas support is just an env var, not a second workflow.** `MONGO_URI` is read from `backend/.env` with no Compose-level override — its shipped default in `.env.example` is `mongodb://mongo:27017/finsphere` (the local container). A developer who prefers Atlas replaces that one value with their Atlas string; nothing else changes, and the still-running `mongo` container simply goes unused. This is deliberately different from `REDIS_URL`, which *is* still force-overridden to the compose network's `redis` service in `docker-compose.yml` — Redis has no Atlas-equivalent "which datastore" decision in play, so there was no reason to give up the simpler override there.
+
+**MongoDB runs as a single-node replica set — this isn't optional.** Trade execution (`tradeController`) uses `mongoose` session transactions (Milestone 15K), and MongoDB only supports transactions on a replica set; a plain standalone `mongod` rejects them with `"This MongoDB deployment does not support retryable writes"`. This was caught by actually running a full buy/sell against the container during validation, not just checking that it starts. Fixed by starting `mongo` with `--replSet rs0` and using the healthcheck to both initiate the replica set on first run and confirm a `PRIMARY` is elected before reporting healthy. `config/db.js` calls `process.exit(1)` on a failed *initial* connection (a deliberate fail-fast from Milestone 3), so the backend's `depends_on` uses `condition: service_healthy` for `mongo` — starting before a primary exists would crash-loop the backend container. Redis has no such gate; `config/redis.js`'s cache-aside helpers already degrade to no-ops on any connection error, so there's nothing to crash.
+
+**Persistent volume for Mongo, none for Redis.** `mongo-data` is a named volume (survives `docker compose down`, only removed by `docker compose down -v`) — losing portfolio/trade/user data on every restart would make local development useless. Redis holds only ephemeral cache entries, so it deliberately has no volume.
+
+**`serve` over nginx for the frontend production image**, per instruction to avoid reverse-proxy-style complexity; documented as a known tradeoff (an nginx:alpine image would be roughly 6× smaller — ~40MB vs ~257MB).
+
+### Files Modified
+
+| File | Change |
+|---|---|
+| `backend/Dockerfile` (new) | Multi-stage: `base`→`deps`/`prod-deps`→`dev`/`production` |
+| `frontend/Dockerfile` (new) | Multi-stage: `deps`→`dev`/`build`→`production`; `VITE_API_URL` passed as a build `ARG` (Vite inlines env vars at build time) |
+| `backend/.dockerignore`, `frontend/.dockerignore` (new) | Exclude `node_modules`, `.env*`, docs, build output |
+| `docker-compose.yml` (new) | Single file: frontend, backend, healthcheck-gated `mongo:7` (replica set, persistent volume), redis |
+| `backend/.env.example` | `MONGO_URI` now defaults to the local Compose container; Atlas/native-without-Docker alternatives given as one-line comments |
+| `render.yaml`, `vercel.json` | **Untouched** — production deployment is unaffected |
+| `README.md` | "Running with Docker" section: one quick-start command, a one-line Atlas mention, rebuilding/stopping, standalone production builds, troubleshooting |
+
+### No Changes
+
+| Area | Reason |
+|---|---|
+| `render.yaml` | Render continues to deploy from source (`runtime: node`) — Docker is a local-dev addition, not a deployment change |
+| `vercel.json` | Vercel continues to build the frontend natively — unaffected |
+| `backend/config/db.js`, `backend/config/redis.js` | Existing fail-fast (Mongo) and graceful-degradation (Redis) behavior is exactly what the Compose healthcheck design accounts for — no application code needed to change |
+| Application routes/controllers | No API contract changes anywhere in this milestone |
+
+### Testing Performed (against the local Mongo container and, separately, real Atlas/Finnhub data)
+
+1. **Local Mongo (default)**: `docker compose up --build` — all four containers healthy (`mongo` shows `Waiting` → `Healthy` before `backend` starts); register/login/buy/sell all succeeded against the containerized, replica-set-enabled MongoDB.
+2. **Replica-set transactions specifically**: confirmed a single-node replica set with an elected `PRIMARY` via `rs.status()`; buy and sell (both use `session.withTransaction()`) succeeded — this is what the original standalone-`mongod` attempt failed on.
+3. **Volume persistence**: data survived a full `docker compose down && docker compose up` cycle; `docker compose down -v` correctly reset it (fresh replica-set initiation on next start).
+4. **Atlas swap**: changed only `MONGO_URI` in `backend/.env` to an Atlas string, restarted — backend connected to Atlas, `mongo` container still ran but was unused, exactly as designed.
+5. **Redis cache-aside**: quote/candle/news requests showed the same miss→hit speedup as Milestone 16, unaffected by the Mongo changes.
+6. **Graceful shutdown**: `docker compose stop backend` produced the identical log sequence as the native version — `SIGTERM received → shutting down gracefully → MongoDB connection closed`.
+7. **Standalone `production` images**: rebuilt and re-verified — non-root (`whoami` → `node`), health check passes, static frontend serves correctly.
+8. **Render/Vercel unaffected**: confirmed `render.yaml` and `vercel.json` have no diff from before this milestone.
+
+### Commit Message
+
+```
+feat(docker): single-file compose stack with local MongoDB replica set
+
+- docker-compose.yml: one file, four services (frontend, backend, mongo,
+  redis) — no override files, profiles, or extra flags; docker compose up
+  is the only command needed
+- mongo runs as a single-node replica set (--replSet rs0) with a healthcheck
+  that initiates it and confirms a PRIMARY before reporting healthy — plain
+  standalone mongod rejects the mongoose session transactions the trade
+  engine (M15K) depends on; backend depends_on uses condition: service_healthy
+  since config/db.js exits on a failed initial connection
+- MONGO_URI has no Compose-level override — it's read straight from
+  backend/.env (default: the local container), so switching to Atlas is a
+  one-line env change with no other workflow to learn
+- persistent mongo-data named volume; REDIS_URL keeps its existing
+  compose-level override (no Atlas-equivalent concern there)
+- README/roadmap/.env.example updated to describe this single workflow
+- no changes to render.yaml, vercel.json, or any application code
+```

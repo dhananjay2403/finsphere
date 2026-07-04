@@ -101,6 +101,64 @@ The frontend runs at `http://localhost:3000` and proxies `/api` requests to the 
 
 ---
 
+## Running with Docker
+
+An alternative to the native setup above — runs the whole stack without installing Node, Redis, or MongoDB directly. Render and Vercel still deploy directly from source either way; this is purely for local development.
+
+### Prerequisites
+
+[Docker Desktop](https://www.docker.com/products/docker-desktop/) (includes Compose) — nothing else to install.
+
+### Quick start
+
+```bash
+cp backend/.env.example backend/.env   # then fill in JWT_SECRET and FINNHUB_API_KEY
+docker compose up --build
+```
+
+Starts four containers — no MongoDB Atlas account needed:
+
+| Service | URL | Notes |
+|---|---|---|
+| `frontend` | `http://localhost:3000` | Vite dev server, hot-reloads on change |
+| `backend` | `http://localhost:5001` | nodemon, restarts on change |
+| `mongo` | _(internal only)_ | Data persists in the `mongo-data` volume |
+| `redis` | _(internal only)_ | Cache — no persistence needed |
+
+Both `frontend/` and `backend/` are bind-mounted, so edits take effect immediately; a rebuild is only needed when dependencies change.
+
+Prefer MongoDB Atlas over the local container? Replace `MONGO_URI` in `backend/.env` with your Atlas connection string — nothing else to change. The `mongo` container keeps running but simply goes unused.
+
+### Rebuilding & stopping
+
+```bash
+docker compose up --build       # after changing package.json in either service
+docker compose down              # stop and remove containers
+docker compose down -v           # also reset the Mongo volume (fresh database next start)
+```
+
+### Standalone production images
+
+Each `Dockerfile` has a `production` target — smaller, non-root, minimal dependencies — for self-hosting outside of Compose. Not used by the current Render/Vercel deployment:
+
+```bash
+docker build --target production -t finsphere-backend ./backend
+docker run -p 5001:5001 --env-file backend/.env finsphere-backend
+
+# VITE_API_URL must be provided at build time — Vite bakes it into the static bundle
+docker build --target production --build-arg VITE_API_URL=https://your-api.example.com/api -t finsphere-frontend ./frontend
+docker run -p 3000:3000 finsphere-frontend
+```
+
+### Troubleshooting
+
+- **Port already allocated** — stop native `npm run dev` processes and any local Redis/MongoDB services first, or edit the `ports:` mappings.
+- **Frontend can't reach the backend** — confirm `VITE_API_URL` in `docker-compose.yml` still points to `http://localhost:5001/api` (must be host-reachable, not the internal service name).
+- **Dependency changes not picked up** — bind mounts don't trigger a re-install; run `docker compose up --build`.
+- **Stale `node_modules` after switching branches** — `docker compose down -v && docker compose up --build` (also resets the Mongo volume, which is fine for dev data).
+
+---
+
 ## Deployment
 
 - **Frontend** — Vercel, deployed from `frontend/` (`vercel.json` handles SPA routing); `VITE_API_URL` set as a build-time environment variable
@@ -138,8 +196,10 @@ Each data type uses a TTL tuned to how fast it changes:
 
 ```text
 finsphere/
-├── render.yaml            # Render deployment manifest
+├── render.yaml                     # Render deployment manifest
+├── docker-compose.yml              # Local dev stack: frontend + backend + mongo + redis
 ├── backend/
+│   ├── Dockerfile
 │   ├── app.js               # Express app (routes, middleware) — no listen/DB connect
 │   ├── server.js             # Boots app.js: connects DB, starts listening
 │   ├── config/               # Database and Redis connections
@@ -150,6 +210,7 @@ finsphere/
 │   ├── services/               # External API adapters (Finnhub, Yahoo Finance)
 │   └── docs/                    # Setup guide, API docs, development roadmap
 └── frontend/
+    ├── Dockerfile
     ├── vercel.json          # Vercel SPA rewrite config
     └── src/
         ├── components/       # Reusable UI components
@@ -166,7 +227,6 @@ finsphere/
 
 ## Future Improvements
 
-- **Docker** — containerize both services for consistent local and CI environments
 - **CI/CD** — automated linting, tests, and build verification on every push
 - **Paper trading competitions** — leaderboards and time-boxed trading challenges between users
 - **Portfolio snapshots** — richer historical performance tracking beyond the current daily snapshot

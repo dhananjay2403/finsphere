@@ -1,0 +1,25 @@
+node_modules
+npm-debug.log*
+
+# Build output — generated inside the image, a stale local copy must never
+# be copied in
+dist
+dist-ssr
+
+# Secrets — never bake these into an image; passed in at build/run time instead
+.env
+.env.*
+!.env.example
+
+.git
+.gitignore
+
+# Editor/OS
+.vscode
+.idea
+.DS_Store
+
+*.md
+
+Dockerfile
+.dockerignore

@@ -4,21 +4,11 @@ import { useAuth } from '../hooks/useAuth';
 import { ROUTES } from '../utils/constants';
 
 
-/**
- * Route guard for all protected pages.
- *
- * Behaviour:
- *  - While AuthContext is validating the stored JWT, shows a centred spinner
- *    so the user doesn't see an incorrect /login redirect.
- *  - If the JWT is invalid/missing, redirects to /login with state={{ from }}
- *    so the user lands back on the originally requested page after logging in.
- *  - Authenticated users (including demo users, who now obtain a real JWT)
- *    pass through to their destination.
- *
- * Note: DEMO_MODE bypass has been removed. The "Explore Demo" flow in
- * LoginPage now obtains a real JWT for the shared demo account, so demo users
- * are fully authenticated and no special guard bypass is needed.
- */
+// Guards every protected page. Shows a spinner while AuthContext is still
+// validating the stored JWT (avoids a flash of the login redirect), then
+// either sends unauthenticated users to /login — preserving where they were
+// headed — or lets them through. Demo users get a real JWT now, so they're
+// authenticated like anyone else; there's no separate demo bypass anymore.
 function ProtectedRoute({ children }) {
   const { isAuthenticated, isLoading } = useAuth();
   const location = useLocation();

@@ -124,8 +124,7 @@ const DIFFICULTY_STYLES = {
   Advanced: { bgcolor: '#fee2e2', color: '#dc2626' },
 };
 
-/* ────────── Desktop card (unchanged design) ────────── */
-
+// Desktop card
 function ModuleCard({ title, slug, description, difficulty, topics }) {
   const badgeStyle = DIFFICULTY_STYLES[difficulty] ?? DIFFICULTY_STYLES.Beginner;
 
@@ -208,8 +207,7 @@ function ModuleCard({ title, slug, description, difficulty, topics }) {
   );
 }
 
-/* Mobile card (compact) */
-
+// Mobile card (compact)
 function MobileModuleCard({ title, slug, summary, difficulty }) {
   const badgeStyle = DIFFICULTY_STYLES[difficulty] ?? DIFFICULTY_STYLES.Beginner;
 
@@ -268,8 +266,6 @@ function MobileModuleCard({ title, slug, summary, difficulty }) {
     </Paper>
   );
 }
-
-/* Main component */
 
 function LearningHub() {
   const [activeFilter, setActiveFilter] = useState('All');

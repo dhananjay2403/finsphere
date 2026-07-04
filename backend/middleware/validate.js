@@ -1,10 +1,6 @@
 const { validationResult } = require('express-validator');
 
-/**
- * Runs after express-validator checks.
- * If errors exist, returns 422 with the first error message.
- * Otherwise, calls next() to proceed to the controller.
-*/
+// Runs after express-validator's checks — 422s with the first error message, or continues.
 const validate = (req, res, next) => {
 
   const errors = validationResult(req);

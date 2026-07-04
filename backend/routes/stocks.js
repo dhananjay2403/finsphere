@@ -7,8 +7,6 @@ const { quote, profile, search, news, history, marketNews } = require('../contro
 const router = express.Router();
 
 
-// Shared param validation 
-
 const symbolParam = [
   param('symbol')
     .trim()
@@ -24,8 +22,6 @@ const searchQuery = [
     .isLength({ min: 1, max: 50 }).withMessage('Query must be between 1 and 50 characters'),
 ];
 
-
-// Routes — all protected 
 
 // GET /api/stocks/quote/:symbol
 router.get('/quote/:symbol', protect, symbolParam, validate, quote);

@@ -6,7 +6,6 @@ const { protect } = require('../middleware/authMiddleware');
 
 const router = express.Router();
 
-// Validation rules for registration
 const registerRules = [
 
   body('name')
@@ -26,7 +25,8 @@ const registerRules = [
     .isLength({ max: 128 }).withMessage('Password cannot exceed 128 characters'),
 ];
 
-// Validation rules for login — presence only, no format hints (avoids field enumeration)
+// login only checks presence, no format hints — a format error would tell an
+// attacker the account exists
 const loginRules = [
   body('email').trim().notEmpty().withMessage('Email is required'),
   body('password').notEmpty().withMessage('Password is required'),

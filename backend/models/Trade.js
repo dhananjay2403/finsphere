@@ -1,15 +1,8 @@
 const mongoose = require('mongoose');
 
-/**
- * Immutable record of every buy or sell action.
- * Documents in this collection are NEVER modified after creation.
- *
- * pricePerShare — the actual market price at the time of execution.
- * totalAmount   — pricePerShare × quantity (pre-computed for display and reporting).
- *
- * No timestamps.updatedAt needed — trades are write-once.
- * Using { timestamps: true } still gives us createdAt, which is the trade timestamp.
- */
+// Write-once record of a buy or sell — never updated after creation.
+// pricePerShare is the actual execution price; totalAmount is pre-computed
+// for display. createdAt (from timestamps) doubles as the trade timestamp.
 const tradeSchema = new mongoose.Schema(
   {
     userId: {
@@ -57,7 +50,7 @@ const tradeSchema = new mongoose.Schema(
     },
   },
   {
-    timestamps: true, // createdAt = trade execution time
+    timestamps: true,
   }
 );
 

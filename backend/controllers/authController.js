@@ -2,15 +2,12 @@ const bcrypt = require('bcryptjs');
 const generateToken = require('../utils/generateToken');
 const User = require('../models/User');
 
-// @desc    Register a new user
-// @route   POST /api/auth/register
-// @access  Public
+// POST /api/auth/register
 const register = async (req, res, next) => {
 
   try {
     const { name, email, password } = req.body;
 
-    // Check for duplicate email
     const existing = await User.findOne({ email });
     if (existing) {
       return res.status(409).json({
@@ -19,11 +16,10 @@ const register = async (req, res, next) => {
       });
     }
 
-    // Hash password — salt rounds: 10 (good balance of security vs speed)
+    // 10 salt rounds — reasonable tradeoff between hash strength and login latency
     const salt = await bcrypt.genSalt(10);
     const hashedPassword = await bcrypt.hash(password, salt);
 
-    // Create user
     const user = await User.create({
       name,
       email,
@@ -52,18 +48,17 @@ const register = async (req, res, next) => {
 };
 
 
-// @desc    Login user
-// @route   POST /api/auth/login
-// @access  Public
+// POST /api/auth/login
 const login = async (req, res, next) => {
 
   try {
     const { email, password } = req.body;
 
-    // Find user — explicitly include password (select: false on schema)
+    // password has select: false on the schema, so it has to be requested explicitly
     const user = await User.findOne({ email }).select('+password');
 
-    // Generic message for both "not found" and "wrong password" — prevents email enumeration
+    // Same message for "no such user" and "wrong password" so a login attempt
+    // can't be used to fish for which emails have accounts.
     if (!user) {
       return res.status(401).json({
         success: false,
@@ -71,7 +66,6 @@ const login = async (req, res, next) => {
       });
     }
 
-    // Compare submitted password against stored hash
     const isMatch = await bcrypt.compare(password, user.password);
     if (!isMatch) {
       return res.status(401).json({
@@ -102,9 +96,7 @@ const login = async (req, res, next) => {
 };
 
 
-// @desc    Get currently authenticated user
-// @route   GET /api/auth/me
-// @access  Protected
+// GET /api/auth/me
 const getMe = (req, res) => {
 
   const { _id, name, email, balance, createdAt } = req.user;

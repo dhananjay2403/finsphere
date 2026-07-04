@@ -1,17 +1,8 @@
 const mongoose = require('mongoose');
 
-/**
- * One document per user-symbol pair.
- * Represents the user's CURRENT position in a stock.
- *
- * avgCostPrice is updated on every buy using a weighted average:
- *   newAvg = ((currentQty * currentAvg) + (buyQty * buyPrice)) / (currentQty + buyQty)
- *
- * This document is deleted when quantity reaches 0 (full sell).
- *
- * Compound unique index: { userId, symbol } — prevents duplicate holdings
- * for the same user and stock.
- */
+// A user's current position in one stock — one doc per user+symbol, deleted
+// when quantity hits 0. avgCostPrice is a weighted average, recomputed on every buy:
+//   newAvg = (currentQty*currentAvg + buyQty*buyPrice) / (currentQty+buyQty)
 const holdingSchema = new mongoose.Schema(
   {
     userId: {

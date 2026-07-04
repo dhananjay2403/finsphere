@@ -55,16 +55,10 @@ function getHealthLabel(score) {
   return { text: 'Poor', color: '#dc2626' };
 }
 
-/**
- * Compute a portfolio health score from real data.
- * Returns { total, metrics: [{ label, score }] }
- *
- * Sub-scores (each 0–100):
- *   Diversification  — based on number of unique holdings (more = better)
- *   Cash Management  — cash as % of portfolio (30–50% = healthy)
- *   Activity         — number of trades executed (more = higher engagement)
- *   Concentration    — inverse of the largest position's weight (lower = better)
- */
+// Portfolio health score, 0-100 across four axes: how many holdings (more
+// is better), how much cash is deployed (healthy band is 20-50%), how
+// active the account is (more trades = higher score), and concentration
+// risk (one giant position scores worse than several even ones).
 function computeHealthScore({ holdings, summary, tradeCount }) {
   const count = holdings?.length ?? 0;
   const totalInvested = summary?.totalInvested ?? 0;
@@ -111,10 +105,7 @@ function computeHealthScore({ holdings, summary, tradeCount }) {
   return { total, metrics };
 }
 
-/**
- * Build allocation segments from holdings.
- * Returns top 3 by totalInvested for the dashboard panel.
- */
+// Top 3 holdings by amount invested, for the dashboard allocation panel.
 function buildDashboardAllocations(holdings) {
   if (!holdings || holdings.length === 0) return [];
   const total = holdings.reduce((s, h) => s + h.totalInvested, 0);
@@ -130,22 +121,12 @@ function buildDashboardAllocations(holdings) {
     }));
 }
 
-/**
- * Build portfolio performance chart data.
- *
- * Primary source: PortfolioSnapshot records returned by GET /api/portfolio/snapshots.
- * Each snapshot holds the real portfolio value (cash + live market prices) at
- * the time it was written, giving an accurate picture of portfolio growth.
- *
- * Fallback (no snapshots yet): approximate using trade history.
- * Walks trades chronologically; each data point is cashBalance + cumulative
- * invested-at-cost at that moment in time.  This is an approximation that
- * ignores unrealised P&L but is better than a flat line.
- *
- * Returns: [{ day: 'Jun 12', value: 98400 }, ...]
- */
+// Prefers real snapshots (actual portfolio value at the time they were
+// written) for the chart. If none exist yet, approximates from trade
+// history instead — walking trades chronologically and using cash +
+// cumulative cost-at-purchase, which ignores unrealised P&L but beats a
+// flat line. Returns [{ day: 'Jun 12', value: 98400 }, ...].
 function buildPerformanceChart(trades, cashBalance, snapshots) {
-  // ── Primary path: real snapshot data ──
   if (snapshots && snapshots.length > 0) {
     return snapshots.map((s) => ({
       day: new Date(s.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
@@ -153,7 +134,6 @@ function buildPerformanceChart(trades, cashBalance, snapshots) {
     }));
   }
 
-  // ── Fallback: trade-based approximation ──
   if (!trades || trades.length === 0) return [];
 
   const sorted = [...trades].sort(
@@ -175,10 +155,7 @@ function buildPerformanceChart(trades, cashBalance, snapshots) {
   });
 }
 
-/**
- * Compute challenge days — number of unique days a trade was made.
- * Capped at CHALLENGE_TOTAL.
- */
+// Number of distinct days with at least one trade, capped at CHALLENGE_TOTAL.
 function computeChallengeDays(trades) {
   if (!trades || trades.length === 0) return 0;
   const days = new Set(
@@ -444,7 +421,7 @@ function Dashboard() {
           />
         </Grid>
 
-        {/* Today's Change — requires live prices; show invested amount as proxy */}
+        {/* Total Invested */}
         <Grid item xs={6} sm={6} md={3}>
           <KpiCard
             label="Total Invested"

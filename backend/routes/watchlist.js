@@ -11,8 +11,6 @@ const {
 const router = express.Router();
 
 
-// Validation rules 
-
 const addRules = [
   body('symbol')
     .trim()
@@ -32,8 +30,6 @@ const removeRules = [
     .isLength({ max: 10 }).withMessage('Symbol too long'),
 ];
 
-
-// Routes 
 
 // GET    /api/watchlist          — fetch all watchlist symbols
 router.get('/', protect, getWatchlist);

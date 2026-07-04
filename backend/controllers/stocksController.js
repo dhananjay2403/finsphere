@@ -8,11 +8,7 @@ const {
 } = require('../services/stockService');
 
 
-// ---------------------------------------------------------------------------
-// @desc    Get real-time quote for a symbol
-// @route   GET /api/stocks/quote/:symbol
-// @access  Protected
-// ---------------------------------------------------------------------------
+// GET /api/stocks/quote/:symbol
 const quote = async (req, res, next) => {
   try {
     const data = await getQuote(req.params.symbol);
@@ -23,11 +19,7 @@ const quote = async (req, res, next) => {
 };
 
 
-// ---------------------------------------------------------------------------
-// @desc    Get company profile for a symbol
-// @route   GET /api/stocks/profile/:symbol
-// @access  Protected
-// ---------------------------------------------------------------------------
+// GET /api/stocks/profile/:symbol
 const profile = async (req, res, next) => {
   try {
     const data = await getProfile(req.params.symbol);
@@ -38,11 +30,7 @@ const profile = async (req, res, next) => {
 };
 
 
-// ---------------------------------------------------------------------------
-// @desc    Search companies by name or symbol
-// @route   GET /api/stocks/search?q=
-// @access  Protected
-// ---------------------------------------------------------------------------
+// GET /api/stocks/search?q=
 const search = async (req, res, next) => {
   try {
     const q = req.query.q;
@@ -60,11 +48,7 @@ const search = async (req, res, next) => {
 };
 
 
-// ---------------------------------------------------------------------------
-// @desc    Get recent news for a symbol
-// @route   GET /api/stocks/news/:symbol
-// @access  Protected
-// ---------------------------------------------------------------------------
+// GET /api/stocks/news/:symbol
 const news = async (req, res, next) => {
   try {
     const data = await getNews(req.params.symbol);
@@ -75,12 +59,7 @@ const news = async (req, res, next) => {
 };
 
 
-// ---------------------------------------------------------------------------
-// @desc    Get historical candle data for charting
-// @route   GET /api/stocks/history/:symbol
-// @access  Protected
-// @query   resolution (default "D"), from (unix ts), to (unix ts)
-// ---------------------------------------------------------------------------
+// GET /api/stocks/history/:symbol?resolution=&from=&to= (unix timestamps)
 const history = async (req, res, next) => {
   try {
     const { resolution, from, to } = req.query;
@@ -92,11 +71,7 @@ const history = async (req, res, next) => {
 };
 
 
-// ---------------------------------------------------------------------------
-// @desc    Get general market news (no symbol needed)
-// @route   GET /api/stocks/market-news?category=general
-// @access  Protected
-// ---------------------------------------------------------------------------
+// GET /api/stocks/market-news?category=general
 const marketNews = async (req, res, next) => {
   try {
     const category = req.query.category || 'general';

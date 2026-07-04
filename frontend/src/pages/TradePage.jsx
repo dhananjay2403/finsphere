@@ -43,10 +43,6 @@ import stockService from '../services/stockService';
 import tradeService from '../services/tradeService';
 
 
-// ---------------------------------------------------------------------------
-// Constants
-// ---------------------------------------------------------------------------
-
 const TIMEFRAMES = ['1D', '1W', '1M', '6M', '1Y'];
 const QUICK_QUANTITIES = [1, 5, 10];
 
@@ -62,14 +58,8 @@ const TIMEFRAME_CONFIG = {
 const DEBOUNCE_MS = 400;
 
 
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
-
-/**
- * Converts candles array from stockService.getHistory into recharts-ready
- * { time: string, price: number } objects.
- */
+// Converts candles from stockService.getHistory into recharts-ready
+// { time, price } points.
 function candlesToChartData(candles = [], resolution) {
   return candles.map((c) => {
     const date = new Date(c.time * 1000);
@@ -85,9 +75,7 @@ function candlesToChartData(candles = [], resolution) {
   });
 }
 
-/**
- * Format large numbers (market cap) compactly: 2950000 → "2.95T"
- */
+// Formats market cap compactly, e.g. 2950000 → "2.95T".
 function formatMarketCap(valueInMillions) {
   if (!valueInMillions) return '—';
   const val = valueInMillions * 1_000_000;
@@ -97,10 +85,6 @@ function formatMarketCap(valueInMillions) {
   return `$${val.toFixed(0)}`;
 }
 
-
-// ---------------------------------------------------------------------------
-// Sub-components
-// ---------------------------------------------------------------------------
 
 function StockChartTooltip({ active, payload, label }) {
   if (!active || !payload?.length) return null;
@@ -202,12 +186,8 @@ function RecentOrderRow({ trade }) {
 }
 
 
-// ---------------------------------------------------------------------------
-// Main component
-// ---------------------------------------------------------------------------
-
 function TradePage() {
-  // ── Search state ────────────────────────────────────────────────────────
+  // Search state
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState([]);
   const [searchLoading, setSearchLoading] = useState(false);
@@ -216,39 +196,39 @@ function TradePage() {
   // Prevents the dropdown from re-opening when a selection sets the query programmatically
   const suppressDropdownRef = useRef(false);
 
-  // ── Selected stock state ─────────────────────────────────────────────────
+  // Selected stock state
   const [stock, setStock] = useState(null);         // quote data
   const [profile, setProfileData] = useState(null); // profile data
   const [stockLoading, setStockLoading] = useState(false);
   const [stockError, setStockError] = useState('');
 
-  // ── Chart state ──────────────────────────────────────────────────────────
+  // Chart state
   const [chartData, setChartData] = useState([]);
   const [chartLoading, setChartLoading] = useState(false);
   const [chartError, setChartError] = useState('');
   const [selectedTimeframe, setSelectedTimeframe] = useState('1M');
 
-  // ── Order state ──────────────────────────────────────────────────────────
+  // Order state
   const [quantity, setQuantity] = useState('');
   const [orderLoading, setOrderLoading] = useState(false);
   const [orderError, setOrderError] = useState('');
   const [orderSuccess, setOrderSuccess] = useState('');
 
-  // ── Portfolio state ──────────────────────────────────────────────────────
+  // Portfolio state
   const [cashBalance, setCashBalance] = useState(null);
   const [cashLoading, setCashLoading] = useState(true);
 
-  // ── Watchlist state ──────────────────────────────────────────────────────
+  // Watchlist state
   const [watchlist, setWatchlist] = useState([]);
   const [watchlistLoading, setWatchlistLoading] = useState(true);
   const [watchlistError, setWatchlistError] = useState('');
 
-  // ── Recent orders state ──────────────────────────────────────────────────
+  // Recent orders state
   const [recentOrders, setRecentOrders] = useState([]);
   const [ordersLoading, setOrdersLoading] = useState(true);
 
 
-  // ── Fetch cash balance on mount ──────────────────────────────────────────
+  // Fetch cash balance on mount
   useEffect(() => {
     api.get('/portfolio/cash')
       .then((res) => setCashBalance(res.data.data.cashBalance))
@@ -256,7 +236,7 @@ function TradePage() {
       .finally(() => setCashLoading(false));
   }, []);
 
-  // ── Fetch watchlist on mount ─────────────────────────────────────────────
+  // Fetch watchlist on mount
   const fetchWatchlist = useCallback(async () => {
     try {
       const res = await api.get('/watchlist');
@@ -270,7 +250,7 @@ function TradePage() {
 
   useEffect(() => { fetchWatchlist(); }, [fetchWatchlist]);
 
-  // ── Fetch recent orders on mount ─────────────────────────────────────────
+  // Fetch recent orders on mount
   const fetchRecentOrders = useCallback(async () => {
     try {
       const result = await tradeService.getHistory({ limit: 5, page: 1 });
@@ -285,7 +265,7 @@ function TradePage() {
   useEffect(() => { fetchRecentOrders(); }, [fetchRecentOrders]);
 
 
-  // ── Debounced search ─────────────────────────────────────────────────────
+  // Debounced search
   useEffect(() => {
     const q = searchQuery.trim();
 
@@ -320,7 +300,7 @@ function TradePage() {
   }, [searchQuery]);
 
 
-  // ── Load stock data (quote + profile) ───────────────────────────────────
+  // Load stock data (quote + profile)
   const loadStock = useCallback(async (symbol) => {
     setStockLoading(true);
     setStockError('');
@@ -346,7 +326,7 @@ function TradePage() {
   }, []);
 
 
-  // ── Load chart data ──────────────────────────────────────────────────────
+  // Load chart data
   const loadChart = useCallback(async (symbol, timeframe) => {
     setChartLoading(true);
     setChartError('');
@@ -368,14 +348,14 @@ function TradePage() {
   }, []);
 
 
-  // ── Re-fetch chart when symbol or timeframe changes ──────────────────────
+  // Re-fetch chart when symbol or timeframe changes
   useEffect(() => {
     if (!stock?.symbol) return;
     loadChart(stock.symbol, selectedTimeframe);
   }, [stock?.symbol, selectedTimeframe, loadChart]);
 
 
-  // ── Select result from dropdown ──────────────────────────────────────────
+  // Select result from dropdown
   const handleSelectStock = (result) => {
     suppressDropdownRef.current = true; // suppress the next auto-search from re-opening dropdown
     clearTimeout(debounceRef.current);  // cancel any in-flight debounce for the old query
@@ -387,13 +367,13 @@ function TradePage() {
   };
 
 
-  // ── Timeframe change ─────────────────────────────────────────────────────
+  // Timeframe change
   const handleTimeframeChange = (tf) => {
     setSelectedTimeframe(tf);
   };
 
 
-  // ── Watchlist helpers ────────────────────────────────────────────────────
+  // Watchlist helpers
   const isInWatchlist = watchlist.some(
     (item) => item.symbol === stock?.symbol
   );
@@ -428,7 +408,7 @@ function TradePage() {
   };
 
 
-  // ── Execute trade ────────────────────────────────────────────────────────
+  // Execute trade
   const executeTrade = async (type) => {
     setOrderError('');
     setOrderSuccess('');
@@ -475,14 +455,14 @@ function TradePage() {
   };
 
 
-  // ── Derived display values ───────────────────────────────────────────────
+  // Derived display values
   const isPositive = (stock?.change ?? 0) >= 0;
   const estimatedTotal = stock && quantity
     ? (parseFloat(quantity) || 0) * stock.price
     : null;
 
 
-  // ── Render ───────────────────────────────────────────────────────────────
+  // Render
   return (
     <Container maxWidth="lg" sx={{ py: 4 }}>
 

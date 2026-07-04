@@ -3,20 +3,10 @@ const axios = require('axios');
 const YahooFinanceClass = require('yahoo-finance2').default;
 const yahooFinance = new YahooFinanceClass();
 
-// ---------------------------------------------------------------------------
-// Finnhub Stock Data Service
-// ---------------------------------------------------------------------------
-// ALL communication with the Finnhub API is contained in this file.
-// Controllers must never import axios or call Finnhub directly.
-//
-// Provider contract:
-//   Every method returns a plain JS object with normalised field names.
-//   If Finnhub is replaced, only this file changes — controllers are unaffected.
-//
-// Error handling:
-//   All methods throw a descriptive Error on failure. The calling controller
-//   catches it via try/catch → next(err) → global errorHandler.
-// ---------------------------------------------------------------------------
+// All Finnhub communication lives here — controllers never touch axios or
+// Finnhub directly, so swapping providers later only means changing this
+// file. Every method throws a descriptive Error on failure and lets the
+// controller's try/catch forward it to the global error handler.
 
 const BASE_URL = 'https://finnhub.io/api/v1';
 
@@ -28,7 +18,6 @@ if (!API_KEY) {
   console.error('⚠  FINNHUB_API_KEY is not set in .env — stock endpoints will fail');
 }
 
-// Shared axios instance for all Finnhub requests
 const finnhubClient = axios.create({
   baseURL: BASE_URL,
   timeout: 8000, // 8 s — Finnhub occasionally runs slow; fail before the Express default
@@ -38,13 +27,8 @@ const finnhubClient = axios.create({
 });
 
 
-// Helper 
-
-/**
- * Wraps every Finnhub call with consistent error normalisation.
- * Distinguishes between Finnhub errors (4xx/5xx), network failures, and
- * rate-limit responses (429).
- */
+// Wraps every Finnhub call and normalises the error — rate limit, bad
+// key, network failure, or a generic upstream error.
 const callFinnhub = async (endpoint, params = {}) => {
 
   if (!API_KEY) {
@@ -95,15 +79,8 @@ const callFinnhub = async (endpoint, params = {}) => {
 };
 
 
-// Public service methods 
-
-/**
- * Get real-time quote for a symbol.
- * Normalises Finnhub's single-letter field names into readable keys.
- *
- * @param {string} symbol — e.g. "AAPL"
- * @returns {{ symbol, price, change, changePercent, high, low, open, previousClose }}
- */
+// Live quote for a symbol — Finnhub's single-letter fields (c, d, dp...)
+// get renamed to something readable below.
 const getQuote = async (symbol) => {
 
   const data = await callFinnhub('/quote', { symbol: symbol.toUpperCase() });
@@ -129,12 +106,7 @@ const getQuote = async (symbol) => {
 };
 
 
-/**
- * Get company profile (name, sector, exchange, logo, etc.).
- *
- * @param {string} symbol
- * @returns {{ symbol, name, exchange, industry, marketCap, logo, weburl, ipo }}
- */
+// Company profile — name, sector, exchange, logo, etc.
 const getProfile = async (symbol) => {
 
   const data = await callFinnhub('/stock/profile2', { symbol: symbol.toUpperCase() });
@@ -161,12 +133,7 @@ const getProfile = async (symbol) => {
 };
 
 
-/**
- * Search for companies by name or symbol.
- *
- * @param {string} query — e.g. "apple" or "AAPL"
- * @returns {Array<{ symbol, name, type, displaySymbol }>}
- */
+// Symbol/company search, filtered down to common stocks only.
 const searchSymbols = async (query) => {
 
   if (!query || query.trim().length < 1) {
@@ -192,13 +159,7 @@ const searchSymbols = async (query) => {
 };
 
 
-/**
- * Get recent company news for a symbol.
- * Default window: last 7 days.
- *
- * @param {string} symbol
- * @returns {Array<{ headline, source, url, summary, datetime, image }>}
- */
+// Recent company news, last 7 days.
 const getNews = async (symbol) => {
 
   // Build a 7-day date window (Finnhub free tier: last 30 days max)
@@ -230,25 +191,10 @@ const getNews = async (symbol) => {
 };
 
 
-/**
- * Get historical OHLCV candle data for charting.
- *
- * Finnhub's /stock/candle endpoint requires a premium plan and returns 401
- * on the free tier.  This implementation uses Yahoo Finance (via the
- * yahoo-finance2 package) which is free, requires no API key, and returns
- * data in the same normalised shape that the rest of the app expects.
- *
- * Resolution mapping (Finnhub → Yahoo Finance):
- *   '1'  → '1m'   '5'  → '5m'   '15' → '15m'
- *   '30' → '30m'  '60' → '60m'
- *   'D'  → '1d'   'W'  → '1wk'  'M'  → '1mo'
- *
- * @param {string} symbol
- * @param {string} resolution — Finnhub-style resolution string
- * @param {number} from — Unix timestamp (seconds)
- * @param {number} to   — Unix timestamp (seconds)
- * @returns {{ symbol, resolution, status, candles: [{ time, open, high, low, close, volume }] }}
- */
+// Historical candles for charting. Finnhub's own candle endpoint is a
+// premium-only feature and 401s on the free tier, so this pulls from Yahoo
+// Finance instead (free, no key needed) and maps Finnhub-style resolution
+// strings onto Yahoo's interval format below.
 const getCandles = async (symbol, resolution = 'D', from, to) => {
 
   const now   = Math.floor(Date.now() / 1000);
@@ -327,13 +273,8 @@ const getCandles = async (symbol, resolution = 'D', from, to) => {
 
 
 
-/**
- * Get general market news (no symbol required).
- * Uses Finnhub's /news endpoint with category="general".
- *
- * @param {string} [category] — "general" | "forex" | "crypto" | "merger" (default "general")
- * @returns {Array<{ id, headline, source, url, summary, datetime, image, category }>}
- */
+// General market news, no symbol needed — category is one of "general",
+// "forex", "crypto", or "merger".
 const getMarketNews = async (category = 'general') => {
 
   const data = await callFinnhub('/news', { category });

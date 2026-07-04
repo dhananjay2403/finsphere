@@ -18,7 +18,6 @@ function NotFound() {
           py: 8,
         }}
       >
-        {/* Large ghost number */}
         <Typography
           sx={{
             fontSize: { xs: '6rem', md: '9rem' },

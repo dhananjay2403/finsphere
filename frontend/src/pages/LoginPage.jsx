@@ -19,11 +19,8 @@ import authService from '../services/authService';
 import { ROUTES } from '../utils/constants';
 
 
-// ---------------------------------------------------------------------------
-// Demo account credentials
-// These are intentionally non-secret — the demo account is a shared account
-// visible to all visitors. No personal data is ever stored on it.
-// ---------------------------------------------------------------------------
+// Not a secret — this is a shared demo account visible to everyone, no
+// personal data ever touches it.
 const DEMO_EMAIL    = 'demo@finsphere.com';
 const DEMO_PASSWORD = 'Demo@finsphere1';
 const DEMO_NAME     = 'Demo User';
@@ -40,44 +37,29 @@ function LoginPage() {
   const navigate  = useNavigate();
   const location  = useLocation();
 
-  // Navigate back to the page the user originally requested,
-  // or fall back to the dashboard.
+  // where the user was headed before being sent to log in, or the dashboard
   const redirectTo = location.state?.from?.pathname || ROUTES.DASHBOARD;
 
-  // ---------------------------------------------------------------------------
-  // Demo login
-  // ---------------------------------------------------------------------------
-  // Obtains a REAL JWT for the shared demo account so the demo user works
-  // exactly like a normal user (live stock quotes, trading, watchlist, etc.)
-  //
-  // Flow:
-  //   1. Try POST /api/auth/login with demo credentials
-  //   2. If the account doesn't exist yet (409/404), auto-register it first
-  //   3. Store the real JWT → navigate to the app
-  //
-  // The demo account is shared between all visitors. Its trades and watchlist
-  // ARE saved in the database (intentional — makes the demo feel real).
-  // Sessions persist for 7 days (JWT expiry) then require re-authentication.
-  // ---------------------------------------------------------------------------
+  // Gets a real JWT for the demo account so it behaves exactly like a normal
+  // user — live quotes, trading, watchlist, all of it. Shared across every
+  // visitor on purpose (trades and watchlist persist), so the demo feels
+  // real rather than a mocked-up sandbox.
   const handleDemoLogin = async () => {
     setIsDemoLoading(true);
     setError('');
 
     try {
-      // ── Step 1: wipe the shared demo account so this session starts clean ──
-      // Deletes all prior trades, holdings, watchlist items and resets the
-      // cash balance to $100,000.  Runs before login so the JWT we receive
-      // reflects the freshly-reset account immediately.
+      // wipe the shared account first so this session starts clean — trades,
+      // holdings, watchlist, and the $100k balance all reset before login
       await authService.resetDemo();
 
-      // ── Step 2: obtain a real JWT for the demo account ──
       let result;
       try {
-        // Attempt direct login first (account already exists)
+        // the account usually already exists, so try logging in directly
         result = await authService.login({ email: DEMO_EMAIL, password: DEMO_PASSWORD });
       } catch (loginErr) {
-        // 401 = wrong password (shouldn't happen), anything else = account missing
-        // Attempt to register the demo account, then login
+        // anything other than 401 (wrong password, which shouldn't happen)
+        // means the account doesn't exist yet — register it, then log in
         if (loginErr.response?.status !== 401) {
           await authService.register({
             name:     DEMO_NAME,

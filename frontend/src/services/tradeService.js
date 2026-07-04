@@ -1,43 +1,24 @@
 import api from './api';
 
 
-// ---------------------------------------------------------------------------
-// Trade Service — frontend wrapper for /api/trades/* endpoints
-// ---------------------------------------------------------------------------
+// Wraps /api/trades/*
 
 const tradeService = {
 
-  /**
-   * Buy shares of a stock.
-   * Calls: POST /api/trades/buy
-   *
-   * @param {{ symbol: string, name: string, quantity: number, pricePerShare: number }} payload
-   * @returns {Promise<{ trade: object, cashBalance: number }>}
-   */
+  // POST /api/trades/buy — pricePerShare is sent for the request shape but
+  // the backend prices the trade itself
   buy: async ({ symbol, name, quantity, pricePerShare }) => {
     const response = await api.post('/trades/buy', { symbol, name, quantity, pricePerShare });
-    return response.data.data; // { trade, cashBalance }
+    return response.data.data;
   },
 
-  /**
-   * Sell shares of a stock.
-   * Calls: POST /api/trades/sell
-   *
-   * @param {{ symbol: string, quantity: number, pricePerShare: number }} payload
-   * @returns {Promise<{ trade: object, cashBalance: number }>}
-   */
+  // POST /api/trades/sell — same note on pricePerShare as buy
   sell: async ({ symbol, quantity, pricePerShare }) => {
     const response = await api.post('/trades/sell', { symbol, quantity, pricePerShare });
-    return response.data.data; // { trade, cashBalance }
+    return response.data.data;
   },
 
-  /**
-   * Get paginated trade history.
-   * Calls: GET /api/trades/history?page=&limit=&symbol=
-   *
-   * @param {{ page?: number, limit?: number, symbol?: string }} [params]
-   * @returns {Promise<{ data: Array, total: number, page: number, totalPages: number }>}
-   */
+  // GET /api/trades/history?page=&limit=&symbol=
   getHistory: async (params = {}) => {
     const response = await api.get('/trades/history', { params });
     const { data, total, page, totalPages } = response.data;

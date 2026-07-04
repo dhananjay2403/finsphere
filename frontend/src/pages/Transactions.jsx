@@ -57,7 +57,7 @@ function formatTime(iso) {
 
 // Sub-components
 
-/** Sticky desktop table header */
+// Sticky desktop table header
 function TableHeader() {
   return (
     <Box
@@ -97,7 +97,7 @@ function TableHeader() {
   );
 }
 
-/** Desktop table row for a single trade */
+// Desktop table row for a single trade
 function TradeRow({ trade, isLast }) {
   const isBuy = trade.type === 'buy';
 
@@ -197,7 +197,7 @@ function TradeRow({ trade, isLast }) {
   );
 }
 
-/** Mobile card for a single trade */
+// Mobile card for a single trade
 function TradeCard({ trade }) {
   const isBuy = trade.type === 'buy';
 
@@ -258,7 +258,7 @@ function TradeCard({ trade }) {
   );
 }
 
-/** Loading skeletons */
+// Loading skeletons
 function LoadingSkeletons() {
   return (
     <>

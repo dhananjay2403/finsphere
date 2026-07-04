@@ -3,19 +3,15 @@ const PortfolioSnapshot = require('../models/PortfolioSnapshot');
 const stockService     = require('../services/stockService');
 
 
-// ---------------------------------------------------------------------------
-// Shared helper — fetch live quotes for an array of holdings
-// ---------------------------------------------------------------------------
-// Uses Promise.allSettled so one failing quote never blocks the whole response.
-// Logs individual failures; callers receive the settled results array and
-// decide how to handle nulls.
-// ---------------------------------------------------------------------------
+// Fetches a live quote per holding. Promise.allSettled so one bad quote
+// doesn't block the rest — callers get the settled results and decide how
+// to handle the failures.
 const fetchQuotes = async (holdings) => {
   const results = await Promise.allSettled(
     holdings.map((h) => stockService.getQuote(h.symbol))
   );
 
-  // Log any individual failures for debugging without crashing the request
+  // log failures without crashing the request
   results.forEach((result, i) => {
     if (result.status === 'rejected') {
       console.error(
@@ -29,21 +25,10 @@ const fetchQuotes = async (holdings) => {
 };
 
 
-// ---------------------------------------------------------------------------
-// Isolated snapshot writer
-// ---------------------------------------------------------------------------
-// Computes the current portfolio value and upserts a PortfolioSnapshot for
-// today.  Isolated as a standalone async function so it can be:
-//
-//   a) Called from the GET /snapshots endpoint (current approach)
-//   b) Triggered after every buy/sell trade
-//   c) Moved to a nightly cron job — just import and call takeSnapshot()
-//
-// The function signature and the PortfolioSnapshot schema are the API
-// contract; the call-site changes; this function does not.
-// ---------------------------------------------------------------------------
+// Computes today's portfolio value and upserts a snapshot for it. Kept as
+// its own function so it's easy to call from a cron job or after every
+// trade later, not just from GET /snapshots as it is today.
 const takeSnapshot = async (userId, cashBalance, holdings, quoteResults, quotesSucceeded) => {
-  // Sum current market value, falling back to cost price for failed quotes
   let marketValue = 0;
   holdings.forEach((h, i) => {
     const result = quoteResults[i];
@@ -60,27 +45,19 @@ const takeSnapshot = async (userId, cashBalance, holdings, quoteResults, quotesS
   const today = new Date();
   today.setUTCHours(0, 0, 0, 0);
 
-  // ---------------------------------------------------------------------------
-  // Critical: only overwrite today's snapshot when at least one live quote
-  // succeeded.  When ALL quotes failed (Finnhub rate-limit / outage), every
-  // holding falls back to avgCostPrice, making totalValue ≈ $100,000 — the
-  // initial balance — regardless of actual portfolio gains.
-  //
-  // Using $setOnInsert ensures that a degraded (all-fallback) value can only
-  // CREATE a new document; it will NEVER overwrite an accurate snapshot that
-  // was already written earlier the same day with real live prices.
-  // ---------------------------------------------------------------------------
+  // Only overwrite today's snapshot if at least one quote actually
+  // succeeded. If Finnhub is down or rate-limited and every quote fails,
+  // every holding falls back to cost price and totalValue collapses to
+  // roughly the starting balance — $setOnInsert means that degraded value
+  // can only create today's snapshot if none exists yet, never overwrite
+  // one already written with real prices.
   if (quotesSucceeded) {
-    // At least one live price — safe to write the real market value
     await PortfolioSnapshot.findOneAndUpdate(
       { userId, date: today },
       { $set: { totalValue, cashBalance } },
       { upsert: true, new: true, setDefaultsOnInsert: true }
     );
   } else {
-    // All quotes failed — only write if no document exists yet for today
-    // (i.e. the user's very first snapshot of the day before any live price
-    // was available).  Never overwrite an accurate value.
     await PortfolioSnapshot.findOneAndUpdate(
       { userId, date: today },
       { $setOnInsert: { totalValue, cashBalance } },
@@ -90,15 +67,8 @@ const takeSnapshot = async (userId, cashBalance, holdings, quoteResults, quotesS
 };
 
 
-// ---------------------------------------------------------------------------
-// @desc    Get all holdings with live prices
-// @route   GET /api/portfolio/holdings
-// @access  Protected
-// ---------------------------------------------------------------------------
-// Enriches each holding with live Finnhub data.
-// Individual quote failures fall back to null — the position is still
-// returned; the UI should handle null gracefully.
-// ---------------------------------------------------------------------------
+// GET /api/portfolio/holdings — if a quote fails, price/value fields come
+// back null rather than dropping the position; the UI handles that case.
 const getHoldings = async (req, res, next) => {
   try {
     const holdings = await Holding.find({ userId: req.user._id })
@@ -151,21 +121,14 @@ const getHoldings = async (req, res, next) => {
 };
 
 
-// ---------------------------------------------------------------------------
-// @desc    Get portfolio summary with live market value
-// @route   GET /api/portfolio/summary
-// @access  Protected
-// ---------------------------------------------------------------------------
-// currentValue = sum(quantity × livePrice) — live from Finnhub.
-// Falls back to totalInvested (purchase cost) for symbols whose quote fails.
-// portfolioValue = cashBalance + currentValue.
-// ---------------------------------------------------------------------------
+// GET /api/portfolio/summary — currentValue sums quantity × live price,
+// falling back to cost basis per-symbol if a quote fails. portfolioValue
+// is just cash + currentValue.
 const getSummary = async (req, res, next) => {
   try {
     const cashBalance = req.user.balance;
     const holdings    = await Holding.find({ userId: req.user._id }).lean();
 
-    // No holdings — portfolio value is just the cash balance
     if (holdings.length === 0) {
       return res.status(200).json({
         success: true,
@@ -193,8 +156,7 @@ const getSummary = async (req, res, next) => {
       if (result.status === 'fulfilled') {
         currentValue += h.quantity * result.value.price;
       } else {
-        // Quote failed — use cost price so portfolio value stays internally consistent
-        currentValue += costBasis;
+        currentValue += costBasis; // quote failed — fall back to cost so the total stays consistent
       }
     });
 
@@ -223,13 +185,7 @@ const getSummary = async (req, res, next) => {
 };
 
 
-// ---------------------------------------------------------------------------
-// @desc    Get available cash balance
-// @route   GET /api/portfolio/cash
-// @access  Protected
-// ---------------------------------------------------------------------------
-// Thin read-only endpoint — no price fetch needed.
-// ---------------------------------------------------------------------------
+// GET /api/portfolio/cash
 const getCash = (req, res) => {
   return res.status(200).json({
     success: true,
@@ -238,47 +194,30 @@ const getCash = (req, res) => {
 };
 
 
-// ---------------------------------------------------------------------------
-// @desc    Get portfolio performance snapshot history
-// @route   GET /api/portfolio/snapshots
-// @access  Protected
-// ---------------------------------------------------------------------------
-// Two responsibilities:
-//   1. Write today's snapshot (via isolated takeSnapshot helper) — non-fatal
-//      if it fails.  Can be moved to a cron/trigger without changing this
-//      endpoint's response shape.
-//   2. Return the last 90 days of snapshots for the performance chart.
-//
-// The first visit of the day creates the snapshot; subsequent visits upsert
-// the same document with updated prices (idempotent).
-// ---------------------------------------------------------------------------
+// GET /api/portfolio/snapshots — writes today's snapshot (best-effort) and
+// returns the last 90 days for the performance chart. Idempotent: the first
+// visit each day creates the snapshot, later visits just update it.
 const getSnapshots = async (req, res, next) => {
   try {
     const cashBalance = req.user.balance;
     const holdings    = await Holding.find({ userId: req.user._id }).lean();
 
-    // Only write a snapshot when the user actually holds something
     if (holdings.length > 0) {
       const quoteResults = await fetchQuotes(holdings);
-
-      // Determine whether at least one live quote succeeded.
-      // This flag is forwarded to takeSnapshot so it can decide whether
-      // to do a full $set upsert (accurate data) or a safe $setOnInsert
-      // (degraded fallback — must not overwrite an accurate value).
+      // passed to takeSnapshot so it knows whether it's safe to overwrite today's value
       const quotesSucceeded = quoteResults.some((r) => r.status === 'fulfilled');
 
-      // Non-fatal: snapshot failure must never break the chart response
+      // non-fatal — a snapshot write failure must never break the chart response
       takeSnapshot(req.user._id, cashBalance, holdings, quoteResults, quotesSucceeded).catch((snapErr) => {
         console.error('[portfolioController] snapshot write failed:', snapErr.message);
       });
     } else {
-      // No holdings — cash-only snapshot; no quotes to fetch, treated as succeeded
+      // no holdings, so no quotes to fetch — trivially "succeeded"
       takeSnapshot(req.user._id, cashBalance, [], [], true).catch((snapErr) => {
         console.error('[portfolioController] snapshot write failed:', snapErr.message);
       });
     }
 
-    // Return historical snapshots (last 90 days), sorted oldest-first for the chart
     const since = new Date();
     since.setDate(since.getDate() - 90);
     since.setUTCHours(0, 0, 0, 0);

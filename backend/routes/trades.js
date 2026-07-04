@@ -7,32 +7,26 @@ const { buyStock, sellStock, getTradeHistory } = require('../controllers/tradeCo
 const router = express.Router();
 
 
-// Shared validation rules 
-
-// symbol: non-empty string, trimmed, uppercased by the controller
 const symbolRule = body('symbol')
   .trim()
   .notEmpty().withMessage('Symbol is required')
   .isLength({ max: 10 }).withMessage('Symbol too long');
 
-// name: required on buy only (sell reads it from the existing Holding)
+// required on buy only — sell reads the name from the existing Holding
 const nameRule = body('name')
   .trim()
   .notEmpty().withMessage('Stock name is required')
   .isLength({ max: 100 }).withMessage('Stock name too long');
 
-// quantity: positive integer
 const quantityRule = body('quantity')
   .notEmpty().withMessage('Quantity is required')
   .isInt({ min: 1 }).withMessage('Quantity must be a whole number of at least 1');
 
-// pricePerShare: positive decimal — sent by the frontend from the stock data it holds
+// still required for the request shape, but the controller fetches its own
+// live price rather than trusting this value
 const priceRule = body('pricePerShare')
   .notEmpty().withMessage('Price per share is required')
   .isFloat({ gt: 0 }).withMessage('Price per share must be greater than 0');
-
-
-// Routes 
 
 // POST /api/trades/buy
 router.post(

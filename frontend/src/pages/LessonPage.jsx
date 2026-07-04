@@ -1083,7 +1083,7 @@ function renderInfographic(infographic) {
   }
 }
 
-/** Renders rich content — supports string (legacy) and structured array */
+// Renders rich content — supports plain strings (legacy) and structured arrays
 function renderSectionContent(content) {
   if (typeof content === 'string') {
     return (

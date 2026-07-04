@@ -1,13 +1,7 @@
 const mongoose = require('mongoose');
 
-/**
- * Each user has exactly ONE watchlist document.
- * Symbols are stored as an embedded array — they always travel together
- * and are never queried independently, making embedding the right choice
- * over a separate collection.
- *
- * Unique index on userId: enforces the 1-to-1 relationship at DB level.
- */
+// One watchlist doc per user. Symbols are embedded rather than their own
+// collection since they're always read and written together with the user.
 const watchlistSchema = new mongoose.Schema(
   {
     userId: {

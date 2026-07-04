@@ -114,14 +114,15 @@ The frontend runs at `http://localhost:3000` and proxies `/api` requests to the 
 finsphere/
 ├── render.yaml            # Render deployment manifest
 ├── backend/
-│   ├── config/             # Database connection
-│   ├── controllers/        # Request handlers / business logic
-│   ├── middleware/         # Auth, validation, error handling
-│   ├── models/              # Mongoose schemas
-│   ├── routes/               # Express route definitions
-│   ├── services/            # External API adapters (Finnhub, Yahoo Finance)
-│   ├── docs/                 # Setup guide, API docs, development roadmap
-│   └── server.js
+│   ├── app.js               # Express app (routes, middleware) — no listen/DB connect
+│   ├── server.js             # Boots app.js: connects DB, starts listening
+│   ├── config/               # Database connection
+│   ├── controllers/          # Request handlers / business logic
+│   ├── middleware/           # Auth, validation, error handling
+│   ├── models/                # Mongoose schemas
+│   ├── routes/                 # Express route definitions
+│   ├── services/               # External API adapters (Finnhub, Yahoo Finance)
+│   └── docs/                    # Setup guide, API docs, development roadmap
 └── frontend/
     ├── vercel.json          # Vercel SPA rewrite config
     └── src/

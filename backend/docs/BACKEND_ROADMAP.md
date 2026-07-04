@@ -1020,4 +1020,32 @@ fix(trades): server-authoritative pricing, atomic transactions, fix concurrent-s
 - sell: atomic conditional holding decrement ($gte guard) — the core fix for
   the concurrent-sell double-credit race
 ```
+
+---
+
+## Milestone 15M — Automated Testing Foundation (Built, Then Reverted)
+
+**Status**: Reverted by decision, not by failure
+
+A working test suite (Vitest + Supertest + mongodb-memory-server) was built and verified — 25 tests across backend (auth, trade execution including the M15K concurrent-sell race, portfolio calculations) and frontend (pure calculation logic), all passing on a clean run.
+
+After review, the decision was made not to carry automated testing forward in this project — the priority is keeping the codebase small and easy to reason about for placement/interview preparation, not maintaining test infrastructure. The test suites, test configs, and every piece of code that existed solely to support them were removed.
+
+**Kept as a standalone improvement**: the `server.js` → `app.js` + `server.js` split. Separating the Express app (routes, middleware) from process bootstrapping (DB connection, `.listen()`) is a clean structural improvement independent of testing.
+
+**Reverted** (all behavior-preserving — nothing here was ever reachable from a production code path): `backend/tests/`, `backend/vitest.config.js`, `frontend/tests/`, the `test` block in `frontend/vite.config.js`, the `vitest`/`supertest`/`mongodb-memory-server`/`jsdom` devDependencies and `test` scripts in both `package.json` files, the `mongoose.models.X ||` registration guard on all 5 models (existed solely to prevent model re-registration across test files sharing a process — never a real production scenario), and the `export` keyword on 4 pure functions in `Dashboard.jsx`/`Portfolio.jsx` (existed solely so tests could import them directly).
+
+### Commit Message
+
+```
+revert: remove automated testing infrastructure, keep app.js/server.js split
+
+- remove backend/tests/, frontend/tests/, vitest.config.js and all
+  vitest/supertest/mongodb-memory-server/jsdom dependencies + test scripts
+- revert mongoose.models.X || guard on all 5 models (existed only to avoid
+  OverwriteModelError across test files) and the export keyword on 4 pure
+  Dashboard/Portfolio functions (existed only for direct test imports)
+- keep the app.js/server.js split — a standalone structural improvement
+  independent of testing
+- no production runtime behavior changes
 ```

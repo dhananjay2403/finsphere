@@ -1,12 +1,7 @@
 const jwt = require('jsonwebtoken');
 const User = require('../models/User');
 
-/**
- * Protects routes that require authentication.
- *
- * Expects:  Authorization: Bearer <token>
- * Attaches: req.user (the authenticated user document, without password)
- */
+// Verifies the Bearer token and attaches req.user for downstream routes.
 const protect = async (req, res, next) => {
 
   const authHeader = req.headers.authorization;
@@ -24,7 +19,7 @@ const protect = async (req, res, next) => {
   try {
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
 
-    // Fetch user from DB — confirms the account still exists
+    // re-fetch to confirm the account still exists, not just that the token is valid
     const user = await User.findById(decoded.id);
 
     if (!user) {

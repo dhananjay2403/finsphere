@@ -1,76 +1,34 @@
 import api from './api';
 
 
-// ---------------------------------------------------------------------------
-// Portfolio Service — frontend wrapper for /api/portfolio/* endpoints
-// ---------------------------------------------------------------------------
-// All communication with the backend portfolio API is contained here.
-// Pages never call api.js directly for portfolio data.
-// ---------------------------------------------------------------------------
+// Wraps /api/portfolio/* — pages should go through this rather than
+// calling api.js directly.
 
 const portfolioService = {
 
-  /**
-   * Get all holdings for the authenticated user.
-   * Calls: GET /api/portfolio/holdings
-   *
-   * @returns {Promise<Array<{
-   *   _id: string,
-   *   symbol: string,
-   *   name: string,
-   *   quantity: number,
-   *   avgCostPrice: number,
-   *   totalInvested: number,
-   *   currentPrice: null,
-   *   currentValue: null,
-   *   unrealisedPnL: null,
-   *   unrealisedPnLPct: null,
-   * }>>}
-   */
+  // GET /api/portfolio/holdings
   getHoldings: async () => {
     const response = await api.get('/portfolio/holdings');
-    return response.data.data; // array of holding objects
+    return response.data.data;
   },
 
-  /**
-   * Get portfolio summary (cash, invested, value, P&L).
-   * Calls: GET /api/portfolio/summary
-   *
-   * @returns {Promise<{
-   *   cashBalance: number,
-   *   totalInvested: number,
-   *   currentValue: number,
-   *   totalReturn: number,
-   *   totalReturnPct: number,
-   *   portfolioValue: number,
-   * }>}
-   */
+  // GET /api/portfolio/summary — cash, invested, current value, P&L
   getSummary: async () => {
     const response = await api.get('/portfolio/summary');
     return response.data.data;
   },
 
-  /**
-   * Get available cash balance only.
-   * Calls: GET /api/portfolio/cash
-   *
-   * @returns {Promise<{ cashBalance: number }>}
-   */
+  // GET /api/portfolio/cash
   getCash: async () => {
     const response = await api.get('/portfolio/cash');
-    return response.data.data; // { cashBalance }
+    return response.data.data;
   },
 
-  /**
-   * Get portfolio performance snapshot history (last 90 days).
-   * Also triggers today's snapshot write on the backend (non-fatal).
-   * Calls: GET /api/portfolio/snapshots
-   *
-   * @returns {Promise<Array<{ date: string, totalValue: number, cashBalance: number }>>}
-   */
+  // GET /api/portfolio/snapshots — last 90 days; also triggers today's
+  // snapshot write on the backend (non-fatal if it fails)
   getSnapshots: async () => {
     const response = await api.get('/portfolio/snapshots');
-    return response.data.data; // array of snapshot objects
+    return response.data.data;
   },
 };
 

@@ -1,12 +1,5 @@
-/**
- * Global error handler middleware.
- *
- * Catches every error that Express routes / middleware pass to next(err).
- * Returns a consistent JSON shape:
- *   { success: false, message: "..." }
- *
- * In development, includes the error stack for easier debugging.
- */
+// Catches every next(err) call and returns a consistent { success, message }
+// shape. Stack traces only go out outside production.
 const errorHandler = (err, _req, res, _next) => {
   const statusCode = err.statusCode || 500;
   const message = err.message || 'Internal Server Error';

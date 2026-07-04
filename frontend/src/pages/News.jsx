@@ -29,7 +29,7 @@ const SKELETON_COUNT = 9;
 
 // Sub-components
 
-/** Animated loading card */
+// Animated loading card
 function NewsCardSkeleton() {
   return (
     <Paper
@@ -56,7 +56,7 @@ function NewsCardSkeleton() {
   );
 }
 
-/** Live news card — clicking opens the article in a new tab */
+// Live news card — clicking opens the article in a new tab
 function NewsCard({ article }) {
   const [imgFailed, setImgFailed] = useState(false);
   const hasImage = Boolean(article.image) && !imgFailed;

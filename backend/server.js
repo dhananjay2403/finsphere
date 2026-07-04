@@ -1,58 +1,10 @@
-const express = require('express');
 const mongoose = require('mongoose');
-const cors = require('cors');
-const morgan = require('morgan');
-require('dotenv').config();
 
+const app = require('./app');
 const connectDB = require('./config/db');
-const errorHandler = require('./middleware/errorHandler');
 
-// Initialise app
-const app = express();
-
-// Connect to MongoDB
 connectDB();
 
-// CORS_ORIGIN is a comma-separated allowlist (e.g. the Vercel frontend URL).
-// Falls back to '*' if unset so this doesn't newly break anything until it's configured.
-const corsOrigin = process.env.CORS_ORIGIN;
-app.use(cors({
-  origin: corsOrigin ? corsOrigin.split(',').map((origin) => origin.trim()) : '*',
-}));
-app.use(express.json({ limit: '10kb' })); // Parse JSON bodies — cap at 10 KB to prevent abuse
-
-if (process.env.NODE_ENV !== 'production') {
-  app.use(morgan('dev'));                 // Log HTTP requests (dev only — noisy in production)
-}
-
-// Health-check route
-app.get('/api/health', (_req, res) => {
-  res.json({
-    success: true,
-    message: 'FinSphere API is running',
-    environment: process.env.NODE_ENV,
-    timestamp: new Date().toISOString(),
-  });
-});
-
-// Routes
-app.use('/api/demo',      require('./routes/demo'));
-app.use('/api/auth',      require('./routes/auth'));
-app.use('/api/portfolio', require('./routes/portfolio'));
-app.use('/api/trades',    require('./routes/trades'));
-app.use('/api/watchlist', require('./routes/watchlist'));
-app.use('/api/stocks',    require('./routes/stocks'));
-
-
-// 404 handler — must come after all route definitions
-app.use((_req, res) => {
-  res.status(404).json({ success: false, message: 'Route not found' });
-});
-
-// Global error handler — must be last middleware
-app.use(errorHandler);
-
-// Start server
 const PORT = process.env.PORT || 5001;
 
 const server = app.listen(PORT, '0.0.0.0', () => {

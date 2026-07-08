@@ -58,7 +58,7 @@ function buildAllocationSegments(holdings) {
   if (total === 0) return [];
 
   const sorted = [...holdings].sort((a, b) => b.totalInvested - a.totalInvested);
-  const TOP_N = 6;
+  const TOP_N = 4;
   const top = sorted.slice(0, TOP_N);
   const rest = sorted.slice(TOP_N);
 

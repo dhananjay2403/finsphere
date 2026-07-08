@@ -33,7 +33,7 @@ npm run dev
 The application will be available at:
 
 ```text
-http://localhost:5173
+http://localhost:3000
 ```
 
 ## Environment Variables
@@ -41,7 +41,7 @@ http://localhost:5173
 Create a `.env` file in the frontend root:
 
 ```env
-VITE_API_URL=http://localhost:5000/api
+VITE_API_URL=http://localhost:5001/api
 ```
 
 A sample configuration is provided in:
@@ -115,35 +115,15 @@ Preview the production build locally:
 npm run preview
 ```
 
-## Planned Enhancements
+## Full Platform
 
-### Backend Integration
+This frontend is one half of the FinSphere platform — the backend and infrastructure are fully implemented. See the [root README](../README.md) for the complete setup.
 
-* Express.js API
-* MongoDB database
-* JWT authentication
-* Portfolio management APIs
-* Trading APIs
-
-### Redis Caching
-
-* Stock price caching
-* News caching
-* Session management
-* Rate limiting support
-
-### Docker
-
-* Multi-stage frontend build
-* Docker Compose setup
-* Environment-based configuration
-
-### CI/CD
-
-* ESLint checks
-* Automated testing
-* Build verification
-* Deployment workflows
+* **Express API** — authentication, portfolio, trading, watchlist, and market-data endpoints
+* **MongoDB (Mongoose)** — users, holdings, trades, and portfolio snapshots
+* **Redis (Upstash)** — quote, candle, and news caching with last-known-good fallback
+* **Docker** — multi-stage builds and Docker Compose for local orchestration
+* **GitHub Actions** — dependency-cached build verification
 
 ## License
 

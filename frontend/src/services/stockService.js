@@ -32,12 +32,6 @@ const stockService = {
     return response.data.data;
   },
 
-  // GET /api/stocks/news/:symbol
-  getNews: async (symbol) => {
-    const response = await api.get(`/stocks/news/${symbol}`);
-    return response.data.data;
-  },
-
   // GET /api/stocks/market-news — category is "general", "forex", "crypto", or "merger"
   getMarketNews: async (category = 'general') => {
     const response = await api.get('/stocks/market-news', { params: { category } });

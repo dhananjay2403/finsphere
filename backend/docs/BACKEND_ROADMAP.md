@@ -96,7 +96,7 @@ Each milestone is independently testable. We do not proceed to the next mileston
 - [x] `utils/generateToken.js`
 - [x] JWT generated on successful login
 - [x] Token contains only `{ id }` — no sensitive data
-- [x] Token expiry via `JWT_EXPIRE` env var (default: 7d)
+- [x] Token expiry via `JWT_EXPIRE` env var (default: 30d)
 - [x] `JWT_SECRET` + `JWT_EXPIRE` added to `.env.example`
 
 **Test**: Login → token returned. Decode confirms `{ id, iat, exp }` only.

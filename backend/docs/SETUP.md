@@ -123,19 +123,25 @@ The `.env` file contains your database password and other secrets. It is exclude
 
 ```
 backend/
-├── server.js                 # Express app entry point
+├── server.js                 # Process bootstrap (DB connect + listen)
+├── app.js                    # Express app (middleware + routes)
 ├── config/
-│   └── db.js                 # MongoDB connection + lifecycle events
+│   ├── db.js                 # MongoDB connection + lifecycle events
+│   └── redis.js              # Redis client + cache helpers
 ├── middleware/
-│   └── errorHandler.js       # Global error handler
-├── models/                   # Mongoose schemas (added in later milestones)
-├── routes/                   # Express route files (added in later milestones)
-├── controllers/              # Route handlers (added in later milestones)
-├── services/                 # External API adapters (added in later milestones)
+│   ├── authMiddleware.js     # JWT auth guard
+│   ├── errorHandler.js       # Global error handler
+│   └── validate.js           # express-validator result handler
+├── models/                   # Mongoose schemas
+├── routes/                   # Express route files
+├── controllers/              # Route handlers
+├── services/                 # External API adapters (Finnhub, Yahoo Finance)
 ├── utils/
-│   └── constants.js          # Shared constants (INITIAL_BALANCE, etc.)
+│   ├── constants.js          # Shared constants (INITIAL_BALANCE, etc.)
+│   └── generateToken.js      # JWT signing helper
 └── docs/
     ├── SETUP.md              # This file
+    ├── PORTFOLIO_API.md      # Portfolio endpoint reference
     └── BACKEND_ROADMAP.md    # Development roadmap and progress
 ```
 
@@ -148,4 +154,9 @@ backend/
 | `PORT` | No | `5001` | Server port |
 | `NODE_ENV` | No | `development` | Environment mode |
 | `MONGO_URI` | **Yes** | — | MongoDB connection string (local or Atlas) |
+| `JWT_SECRET` | **Yes** | — | Secret used to sign JWTs |
+| `JWT_EXPIRE` | No | `30d` | JWT expiry window |
+| `FINNHUB_API_KEY` | **Yes** | — | Finnhub API key for market data |
+| `CORS_ORIGIN` | No | `*` | Comma-separated list of allowed origins |
+| `REDIS_URL` | No | — | Redis connection URL; caching degrades to no-cache if unset |
 

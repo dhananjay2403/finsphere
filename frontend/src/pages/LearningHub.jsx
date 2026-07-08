@@ -1,8 +1,9 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Box, Container, Typography, Grid, Paper, Chip, Button } from '@mui/material';
+import { Box, Container, Typography, Grid, Paper, Chip } from '@mui/material';
 import SchoolIcon from '@mui/icons-material/School';
 import ArrowForwardIcon from '@mui/icons-material/ArrowForward';
+import { DIFFICULTY_STYLES } from '../utils/constants';
 
 
 const MODULES = [
@@ -117,12 +118,6 @@ const MODULES = [
 ];
 
 const FILTERS = ['All', 'Beginner', 'Intermediate', 'Advanced'];
-
-const DIFFICULTY_STYLES = {
-  Beginner: { bgcolor: '#dcfce7', color: '#15803d' },
-  Intermediate: { bgcolor: '#fef3c7', color: '#b45309' },
-  Advanced: { bgcolor: '#fee2e2', color: '#dc2626' },
-};
 
 // Desktop card
 function ModuleCard({ title, slug, description, difficulty, topics }) {

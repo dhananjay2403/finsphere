@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { Box, Container, Typography, Chip, Paper, Button } from '@mui/material';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
@@ -7,13 +7,8 @@ import AccessTimeIcon from '@mui/icons-material/AccessTime';
 import CheckCircleOutlineIcon from '@mui/icons-material/CheckCircleOutline';
 import LightbulbOutlinedIcon from '@mui/icons-material/LightbulbOutlined';
 import QuizIcon from '@mui/icons-material/Quiz';
-import { ROUTES } from '../utils/constants';
+import { ROUTES, DIFFICULTY_STYLES } from '../utils/constants';
 import {
-  FlowDiagram,
-  ComparisonDiagram,
-  AllocationDiagram,
-  TimelineDiagram,
-  ProcessDiagram,
   StockMarketFlowDiagram,
   ETFDiversificationDiagram,
   ComparisonTableDiagram,
@@ -28,14 +23,6 @@ import {
   BlockchainDiagram,
 } from '../components/Infographics';
 
-
-/* Shared styles */
-
-const DIFFICULTY_STYLES = {
-  Beginner: { bgcolor: '#dcfce7', color: '#15803d' },
-  Intermediate: { bgcolor: '#fef3c7', color: '#b45309' },
-  Advanced: { bgcolor: '#fee2e2', color: '#dc2626' },
-};
 
 /* Lesson data */
 
@@ -1062,11 +1049,6 @@ function renderInfographic(infographic) {
   if (!infographic) return null;
   const { type, props } = infographic;
   switch (type) {
-    case 'flow': return <FlowDiagram {...props} />;
-    case 'comparison': return <ComparisonDiagram {...props} />;
-    case 'allocation': return <AllocationDiagram {...props} />;
-    case 'timeline': return <TimelineDiagram {...props} />;
-    case 'process': return <ProcessDiagram {...props} />;
     case 'stock-market-flow': return <StockMarketFlowDiagram {...props} />;
     case 'etf-diversification': return <ETFDiversificationDiagram {...props} />;
     case 'comparison-table': return <ComparisonTableDiagram {...props} />;
@@ -1286,6 +1268,11 @@ function LessonQuiz({ questions }) {
 function LessonPage() {
   const { slug } = useParams();
   const lesson = LESSON_CONTENT[slug];
+
+  // Every lesson opens at the top, even when navigating from a scrolled Learning Hub or between lessons.
+  useEffect(() => {
+    window.scrollTo(0, 0);
+  }, [slug]);
 
   if (!lesson) {
     return (

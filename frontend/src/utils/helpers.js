@@ -43,3 +43,8 @@ export function timeAgo(date) {
 
   return 'just now';
 }
+
+// Formats a date as short month + day (e.g. "Jan 5")
+export function formatShortDate(date) {
+  return new Date(date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+}

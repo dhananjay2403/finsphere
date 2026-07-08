@@ -37,7 +37,7 @@ import AccountBalanceWalletIcon from '@mui/icons-material/AccountBalanceWallet';
 import TrendingUpIcon from '@mui/icons-material/TrendingUp';
 import TrendingDownIcon from '@mui/icons-material/TrendingDown';
 
-import { formatCurrency, formatPercent } from '../utils/helpers';
+import { formatCurrency, formatPercent, formatShortDate } from '../utils/helpers';
 import api from '../services/api';
 import stockService from '../services/stockService';
 import tradeService from '../services/tradeService';
@@ -69,7 +69,7 @@ function candlesToChartData(candles = [], resolution) {
       timeLabel = date.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false });
     } else {
       // Daily: show Mon DD
-      timeLabel = date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+      timeLabel = formatShortDate(date);
     }
     return { time: timeLabel, price: c.close };
   });
@@ -178,7 +178,7 @@ function RecentOrderRow({ trade }) {
           {isBuy ? '-' : '+'}{formatCurrency(trade.totalAmount)}
         </Typography>
         <Typography variant="caption" color="text.secondary">
-          {new Date(trade.executedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+          {formatShortDate(trade.executedAt)}
         </Typography>
       </Box>
     </Box>

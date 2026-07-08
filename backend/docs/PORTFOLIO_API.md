@@ -62,17 +62,19 @@ Returns the authenticated user's current stock positions.
       "quantity": 5,
       "avgCostPrice": 415.00,
       "totalInvested": 2075.00,
-      "currentPrice": null,
-      "currentValue": null,
-      "unrealisedPnL": null,
-      "unrealisedPnLPct": null
+      "currentPrice": 428.50,
+      "currentValue": 2142.50,
+      "unrealisedPnL": 67.50,
+      "unrealisedPnLPct": 3.25
     }
   ]
 }
 ```
 
-> **Note**: `currentPrice`, `currentValue`, `unrealisedPnL`, and `unrealisedPnLPct` are `null`
-> until live stock prices are integrated (Milestone 12). The shape is final.
+> **Note**: `currentPrice`, `currentValue`, `unrealisedPnL`, and `unrealisedPnLPct` come from a
+> live quote. If the market-data provider is temporarily unavailable, these four fields fall back
+> to `null` for that holding (the position itself is still returned) — clients should render `null`
+> as a placeholder such as `—`.
 
 ---
 
@@ -88,10 +90,12 @@ Returns aggregate portfolio financials for the P&L Summary cards.
   "data": {
     "cashBalance": 96100.00,
     "totalInvested": 3900.00,
-    "currentValue": 3900.00,
-    "totalReturn": 0.00,
-    "totalReturnPct": 0.00,
-    "portfolioValue": 100000.00
+    "currentValue": 4025.00,
+    "totalReturn": 125.00,
+    "totalReturnPct": 3.21,
+    "totalPnL": 125.00,
+    "totalPnLPct": 0.13,
+    "portfolioValue": 100125.00
   }
 }
 ```
@@ -100,9 +104,11 @@ Returns aggregate portfolio financials for the P&L Summary cards.
 |-------|-------------|
 | `cashBalance` | Uninvested cash (`user.balance`) |
 | `totalInvested` | Sum of `quantity × avgCostPrice` across all holdings |
-| `currentValue` | Market value of all holdings — equals `totalInvested` until live prices are available |
-| `totalReturn` | `currentValue - totalInvested` (absolute P&L) |
+| `currentValue` | Live market value of all holdings (falls back to cost basis for any holding whose quote is unavailable) |
+| `totalReturn` | `currentValue - totalInvested` (unrealised P&L on open positions) |
 | `totalReturnPct` | `(totalReturn / totalInvested) × 100` |
+| `totalPnL` | `portfolioValue - 100000` (account P&L since the fixed $100k starting balance) |
+| `totalPnLPct` | `(totalPnL / 100000) × 100` |
 | `portfolioValue` | `cashBalance + currentValue` |
 
 ---

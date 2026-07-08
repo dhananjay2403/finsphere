@@ -2,13 +2,15 @@
 
 # FinSphere
 
+![Node.js](https://img.shields.io/badge/Node.js-20+-339933?logo=nodedotjs&logoColor=white) ![Express](https://img.shields.io/badge/Express-5-000000?logo=express&logoColor=white) ![React](https://img.shields.io/badge/React-18-61DAFB?logo=react&logoColor=white) ![MongoDB](https://img.shields.io/badge/MongoDB-Atlas-47A248?logo=mongodb&logoColor=white) ![Redis](https://img.shields.io/badge/Redis-Upstash-DC382D?logo=redis&logoColor=white) ![Docker](https://img.shields.io/badge/Docker-Compose-2496ED?logo=docker&logoColor=white) ![Vercel](https://img.shields.io/badge/Vercel-Frontend-000000?logo=vercel&logoColor=white) ![Render](https://img.shields.io/badge/Render-Backend-46E3B7?logo=render&logoColor=white)
+
 **A full-stack paper-trading platform for learning to invest — real prices, zero risk.**
 
+[![Live Demo](https://img.shields.io/badge/%F0%9F%9A%80_Live_Demo-7A3E48?style=for-the-badge&logo=vercel&logoColor=white)](https://finsphere.vercel.app/login?demo=true)
+
+One-click demo login — no signup required.
+
 </div>
-
-Trade live-priced stocks on a virtual $100,000 balance with a real portfolio dashboard, charts, news, and a financial-literacy curriculum — every trade executes at a server-verified price inside an atomic transaction, engineered like a real brokerage, not a toy.
-
-![CI](https://github.com/dhananjay2403/finsphere/actions/workflows/ci.yml/badge.svg) ![Node.js](https://img.shields.io/badge/Node.js-339933?logo=node.js&logoColor=white) ![React](https://img.shields.io/badge/React-18-61DAFB?logo=react&logoColor=white) ![Express](https://img.shields.io/badge/Express-5-000000?logo=express&logoColor=white) ![MongoDB](https://img.shields.io/badge/MongoDB-Atlas-47A248?logo=mongodb&logoColor=white) ![Deployed](https://img.shields.io/badge/Deployed-Vercel%20%2B%20Render-000000?logo=vercel&logoColor=white)
 
 ---
 
@@ -30,40 +32,76 @@ Trade live-priced stocks on a virtual $100,000 balance with a real portfolio das
 
 ## Features
 
-- **Authentication** — JWT-based register/login, hashed passwords, protected routes, persistent sessions
-- **Virtual trading** — buy and sell real stocks against a virtual $100,000 balance, executed at live market prices
-- **Live stock quotes** — real-time pricing via the Finnhub API
-- **Historical charts** — intraday and daily candle charts via Yahoo Finance
-- **Portfolio tracking** — live holdings, weighted-average cost basis, unrealized gain/loss per position
-- **Performance analytics** — portfolio value over time, allocation breakdown, transaction history
-- **Portfolio health score** — a computed score summarizing diversification and performance
-- **Market news** — general market news and per-symbol company news
-- **Learning Hub** — 12 structured lessons (beginner → advanced) with interactive quizzes and custom financial infographics
+- **Authentication** — JWT register/login, hashed passwords, protected routes, persistent sessions
+- **Virtual trading** — buy and sell real stocks against a virtual $100,000 balance at live prices
+- **Live quotes & charts** — real-time pricing via Finnhub; intraday/daily candles via Yahoo Finance
+- **Portfolio tracking** — live holdings, weighted-average cost basis, per-position unrealized P&L
+- **Analytics** — portfolio value over time, allocation breakdown, transaction history, health score
+- **Market news** — general market and per-symbol company news
+- **Learning Hub** — 12 lessons (beginner → advanced) with quizzes and custom financial infographics
 - **Watchlist** — track symbols without holding a position
-- **Responsive design** — dedicated mobile layouts across every page, not just reflowed desktop views
+- **Responsive** — dedicated mobile layouts across every page, not just reflowed desktop views
 
 ---
 
-## Security Highlights
+## Tech Stack
 
-- **Authentication** — stateless JWT Bearer tokens verified against the database on every protected request; passwords hashed with bcrypt and never returned by any query
-- **Trade integrity** — execution price is fetched live from the server and never trusted from the client; every trade's balance update, holding update, and record commit atomically via race-safe conditional updates (e.g. `quantity: { $gte: qty }`), so concurrent requests can't double-sell shares or double-credit a balance
-- **Request safety** — input validation on every write endpoint, request body size limits, and every query scoped to the authenticated user's own ID
+| Layer | Technology |
+|---|---|
+| Frontend | React 18, Vite, Material UI, React Router, Recharts, Axios |
+| Backend | Node.js, Express 5, JWT, bcrypt, express-validator |
+| Database | MongoDB Atlas (Mongoose) |
+| Cache | Redis (Upstash) |
+| Market data | Finnhub (quotes/news), Yahoo Finance (candles) |
+| DevOps | Docker Compose, GitHub Actions, Vercel, Render |
 
 ---
 
-## Installation
+## Architecture
+
+Two independent services — a React SPA (Vercel) and an Express API (Render) — backed by MongoDB Atlas and an optional Redis cache. The frontend calls the API over `VITE_API_URL`; every trade executes at a server-verified price inside an atomic MongoDB transaction.
+
+```text
+finsphere/
+├── render.yaml                # Render deployment manifest
+├── docker-compose.yml         # Local dev stack: frontend + backend + mongo + redis
+├── backend/
+│   ├── app.js                 # Express app (routes, middleware) — no listen/DB connect
+│   ├── server.js              # Boots app.js: connects DB, starts listening
+│   ├── config/                # Database and Redis connections
+│   ├── controllers/           # Request handlers / business logic
+│   ├── middleware/            # Auth, validation, error handling
+│   ├── models/                # Mongoose schemas
+│   ├── routes/                # Express route definitions
+│   ├── services/              # External API adapters (Finnhub, Yahoo Finance)
+│   └── docs/                  # Setup guide, API docs, development roadmap
+└── frontend/
+    ├── vercel.json            # Vercel SPA rewrite config
+    └── src/
+        ├── components/        # Reusable UI components
+        ├── context/           # Auth context/state
+        ├── hooks/             # Custom hooks
+        ├── layouts/           # Page layout wrappers
+        ├── pages/             # Route-level pages
+        ├── routes/            # Routing + protected-route guard
+        ├── services/          # API client layer
+        └── utils/             # Constants and helpers
+```
+
+---
+
+## Getting Started
 
 ### Prerequisites
 
-Node.js ≥ 18, npm, and a MongoDB instance (local or [Atlas free tier](https://www.mongodb.com/atlas))
+Node.js 20+, npm, and a MongoDB instance (local or [Atlas free tier](https://www.mongodb.com/atlas)).
 
 ### Backend
 
 ```bash
 cd backend
 npm install
-cp .env.example .env   # then fill in the values below
+cp .env.example .env   # then fill in the values (see Environment Variables)
 npm run dev
 ```
 
@@ -78,7 +116,36 @@ npm run dev
 
 The frontend runs at `http://localhost:3000` and proxies `/api` requests to the backend at `http://localhost:5001`.
 
-### Environment Variables
+### Running with Docker
+
+Runs the whole stack without installing Node, Redis, or MongoDB directly — purely for local dev (Render and Vercel deploy from source).
+
+```bash
+cp backend/.env.example backend/.env   # then fill in JWT_SECRET and FINNHUB_API_KEY
+docker compose up --build
+```
+
+Starts four bind-mounted containers with hot reload — `frontend` (`:3000`), `backend` (`:5001`), `mongo`, and `redis`. Prefer Atlas? Replace `MONGO_URI` in `backend/.env`; nothing else changes.
+
+```bash
+docker compose down      # stop and remove containers
+docker compose down -v   # also reset the Mongo volume
+```
+
+Each `Dockerfile` also has a non-root `production` target for self-hosting outside Compose (not used by the current Render/Vercel deployment):
+
+```bash
+docker build --target production -t finsphere-backend ./backend
+docker run -p 5001:5001 --env-file backend/.env finsphere-backend
+
+# VITE_API_URL is baked in at build time
+docker build --target production --build-arg VITE_API_URL=https://your-api.example.com/api -t finsphere-frontend ./frontend
+docker run -p 3000:3000 finsphere-frontend
+```
+
+---
+
+## Environment Variables
 
 **`backend/.env`**
 
@@ -88,7 +155,7 @@ The frontend runs at `http://localhost:3000` and proxies `/api` requests to the 
 | `NODE_ENV` | No (default `development`) | Environment mode |
 | `MONGO_URI` | **Yes** | MongoDB connection string (local or Atlas) |
 | `JWT_SECRET` | **Yes** | Secret used to sign auth tokens |
-| `JWT_EXPIRE` | No (default `7d`) | Token lifetime |
+| `JWT_EXPIRE` | No (default `30d`) | Token lifetime |
 | `FINNHUB_API_KEY` | **Yes** | [Free Finnhub API key](https://finnhub.io/) |
 | `CORS_ORIGIN` | No (default: all origins) | Comma-separated allowed origins in production |
 | `REDIS_URL` | No | Caches quotes/candles/news to reduce Finnhub calls. Omit to run without a cache — the app degrades gracefully |
@@ -101,84 +168,21 @@ The frontend runs at `http://localhost:3000` and proxies `/api` requests to the 
 
 ---
 
-## Running with Docker
-
-An alternative to the native setup above — runs the whole stack without installing Node, Redis, or MongoDB directly. Render and Vercel still deploy directly from source either way; this is purely for local development.
-
-### Prerequisites
-
-[Docker Desktop](https://www.docker.com/products/docker-desktop/) (includes Compose) — nothing else to install.
-
-### Quick start
-
-```bash
-cp backend/.env.example backend/.env   # then fill in JWT_SECRET and FINNHUB_API_KEY
-docker compose up --build
-```
-
-Starts four containers — no MongoDB Atlas account needed:
-
-| Service | URL | Notes |
-|---|---|---|
-| `frontend` | `http://localhost:3000` | Vite dev server, hot-reloads on change |
-| `backend` | `http://localhost:5001` | nodemon, restarts on change |
-| `mongo` | _(internal only)_ | Data persists in the `mongo-data` volume |
-| `redis` | _(internal only)_ | Cache — no persistence needed |
-
-Both `frontend/` and `backend/` are bind-mounted, so edits take effect immediately; a rebuild is only needed when dependencies change.
-
-Prefer MongoDB Atlas over the local container? Replace `MONGO_URI` in `backend/.env` with your Atlas connection string — nothing else to change. The `mongo` container keeps running but simply goes unused.
-
-### Rebuilding & stopping
-
-```bash
-docker compose up --build       # after changing package.json in either service
-docker compose down              # stop and remove containers
-docker compose down -v           # also reset the Mongo volume (fresh database next start)
-```
-
-### Standalone production images
-
-Each `Dockerfile` has a `production` target — smaller, non-root, minimal dependencies — for self-hosting outside of Compose. Not used by the current Render/Vercel deployment:
-
-```bash
-docker build --target production -t finsphere-backend ./backend
-docker run -p 5001:5001 --env-file backend/.env finsphere-backend
-
-# VITE_API_URL must be provided at build time — Vite bakes it into the static bundle
-docker build --target production --build-arg VITE_API_URL=https://your-api.example.com/api -t finsphere-frontend ./frontend
-docker run -p 3000:3000 finsphere-frontend
-```
-
-### Troubleshooting
-
-- **Port already allocated** — stop native `npm run dev` processes and any local Redis/MongoDB services first, or edit the `ports:` mappings.
-- **Frontend can't reach the backend** — confirm `VITE_API_URL` in `docker-compose.yml` still points to `http://localhost:5001/api` (must be host-reachable, not the internal service name).
-- **Dependency changes not picked up** — bind mounts don't trigger a re-install; run `docker compose up --build`.
-- **Stale `node_modules` after switching branches** — `docker compose down -v && docker compose up --build` (also resets the Mongo volume, which is fine for dev data).
-
----
-
 ## Deployment
 
-- **Frontend** — Vercel, deployed from `frontend/` (`vercel.json` handles SPA routing); `VITE_API_URL` set as a build-time environment variable
+- **Frontend** — Vercel, from `frontend/` (`vercel.json` handles SPA routing); `VITE_API_URL` set as a build-time env var
 - **Backend** — Render, defined by `render.yaml`; secrets (`MONGO_URI`, `JWT_SECRET`, `FINNHUB_API_KEY`, `CORS_ORIGIN`) set in the dashboard
 - **Database** — MongoDB Atlas
-- **Cache** — Redis (optional); any provider that gives a connection string works (Render Key Value, Upstash, Redis Cloud). Set `REDIS_URL` in the dashboard — omit it and the backend runs uncached
-
----
-
-## Continuous Integration
-
-A GitHub Actions workflow (`.github/workflows/ci.yml`) runs on every push and pull request: installs backend and frontend dependencies, then builds the frontend. It only verifies the project installs and builds cleanly — no tests, linting, or deployment are part of this pipeline.
+- **Cache** — Redis (optional); any provider with a connection string works. Set `REDIS_URL`, or omit it to run uncached
+- **CI** — GitHub Actions (`.github/workflows/ci.yml`) installs both packages and builds the frontend on every push and PR (install/build verification only)
 
 ---
 
 ## Performance
 
-Public market-data endpoints (quotes, historical candles, market news) are cached in Redis using the **cache-aside** pattern: a request is served straight from Redis on a hit, and only falls through to the Finnhub/Yahoo API on a miss, storing the result before returning it. If Redis is unavailable the app degrades gracefully and calls the upstream API directly, exactly as it did before caching.
+Public market-data endpoints (quotes, candles, news) use the **cache-aside** pattern: served from Redis on a hit, falling through to Finnhub/Yahoo on a miss. If Redis is unavailable the app degrades gracefully and calls the upstream API directly.
 
-Measured over 30 Postman Runner iterations per endpoint (first iteration = cache miss, remainder = cache hits):
+Measured over 30 Postman Runner iterations per endpoint (first = cache miss, rest = cache hits):
 
 | Endpoint | Cache miss (live API) | Cache hit (Redis) | Reduction |
 |---|---|---|---|
@@ -186,54 +190,12 @@ Measured over 30 Postman Runner iterations per endpoint (first iteration = cache
 | Historical candles | 538 ms | 37 ms | **93.1%** |
 | Market news | 429 ms | 37.3 ms | **91.3%** |
 
-Each data type uses a TTL tuned to how fast it changes:
-
-| Data | TTL | Rationale |
-|---|---|---|
-| Quotes | 10 seconds | Prices move fast; a short TTL keeps them fresh while collapsing bursts of duplicate lookups (e.g. the dashboard re-pricing every holding on load) into a single API call |
-| Historical candles | 5 minutes | Closed historical bars barely change within a session |
-| Market news | 2 minutes | Headlines don't update second to second |
-
-**Trade execution intentionally bypasses Redis** — every buy and sell fetches a fresh, live Finnhub price at execution time, so an order is never filled against a cached (potentially stale) price. Caching is applied only to read-only market data displayed in the UI.
+TTLs are tuned per data type — **quotes 30 s**, **candles 5 min**, **news 2 min**. **Trade execution bypasses the cache entirely**: every buy/sell fetches a fresh live price, so orders never fill against stale data.
 
 ---
 
-## Folder Structure
+## Security
 
-```text
-finsphere/
-├── render.yaml                     # Render deployment manifest
-├── docker-compose.yml              # Local dev stack: frontend + backend + mongo + redis
-├── backend/
-│   ├── Dockerfile
-│   ├── app.js               # Express app (routes, middleware) — no listen/DB connect
-│   ├── server.js             # Boots app.js: connects DB, starts listening
-│   ├── config/               # Database and Redis connections
-│   ├── controllers/          # Request handlers / business logic
-│   ├── middleware/           # Auth, validation, error handling
-│   ├── models/                # Mongoose schemas
-│   ├── routes/                 # Express route definitions
-│   ├── services/               # External API adapters (Finnhub, Yahoo Finance)
-│   └── docs/                    # Setup guide, API docs, development roadmap
-└── frontend/
-    ├── Dockerfile
-    ├── vercel.json          # Vercel SPA rewrite config
-    └── src/
-        ├── components/       # Reusable UI components
-        ├── context/           # Auth context/state
-        ├── hooks/             # Custom hooks
-        ├── layouts/           # Page layout wrappers
-        ├── pages/             # Route-level pages
-        ├── routes/            # Routing + protected-route guard
-        ├── services/          # API client layer
-        └── utils/             # Constants and helpers
-```
-
----
-
-## Future Improvements
-
-- **Testing & linting in CI** — the current pipeline only verifies install/build; no automated tests or linting yet
-- **CD** — automated deployment on every merge to `main`
-- **Paper trading competitions** — leaderboards and time-boxed trading challenges between users
-- **Portfolio snapshots** — richer historical performance tracking beyond the current daily snapshot
+- **Authentication** — stateless JWT Bearer tokens verified against the database on every protected request; passwords bcrypt-hashed and never returned by any query
+- **Trade integrity** — execution price is fetched server-side, never trusted from the client; balance, holding, and record updates commit atomically via race-safe conditional updates (e.g. `quantity: { $gte: qty }`), so concurrent requests can't double-sell or double-credit
+- **Request safety** — input validation on every write endpoint, request body size limits, and every query scoped to the authenticated user's own ID

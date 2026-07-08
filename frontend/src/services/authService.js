@@ -27,12 +27,6 @@ const authService = {
     const response = await api.post('/demo/login', {}, { timeout: 20_000 });
     return response.data;
   },
-
-  // Resets the shared demo account to its initial state before a new demo session starts.
-  resetDemo: async () => {
-    const response = await api.post('/demo/reset');
-    return response.data;
-  },
 };
 
 

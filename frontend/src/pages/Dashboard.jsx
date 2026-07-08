@@ -19,7 +19,7 @@ import EmojiEventsIcon from '@mui/icons-material/EmojiEvents';
 import ArrowForwardIcon from '@mui/icons-material/ArrowForward';
 import TrendingDownIcon from '@mui/icons-material/TrendingDown';
 import { useAuth } from '../hooks/useAuth';
-import { formatCurrency, formatPercent } from '../utils/helpers';
+import { formatCurrency, formatPercent, formatShortDate } from '../utils/helpers';
 import { ROUTES } from '../utils/constants';
 import portfolioService from '../services/portfolioService';
 import tradeService from '../services/tradeService';
@@ -152,7 +152,7 @@ function buildDashboardAllocations(holdings) {
 function buildPerformanceChart(trades, cashBalance, snapshots) {
   if (snapshots && snapshots.length > 0) {
     return snapshots.map((s) => ({
-      day: new Date(s.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
+      day: formatShortDate(s.date),
       value: s.totalValue,
     }));
   }
@@ -172,7 +172,7 @@ function buildPerformanceChart(trades, cashBalance, snapshots) {
     }
     // Approximate total value = current cash + what was invested up to this point
     return {
-      day: new Date(trade.executedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
+      day: formatShortDate(trade.executedAt),
       value: parseFloat((cashBalance + cumInvested).toFixed(2)),
     };
   });
@@ -318,7 +318,7 @@ function RecentTxRow({ trade }) {
           {isBuy ? '-' : '+'}{formatCurrency(trade.totalAmount)}
         </Typography>
         <Typography variant="caption" color="text.secondary">
-          {new Date(trade.executedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+          {formatShortDate(trade.executedAt)}
         </Typography>
       </Box>
     </Box>

@@ -52,4 +52,7 @@ const tradeSchema = new mongoose.Schema(
   }
 );
 
+// Covers the trade-history query: find by userId (optionally + symbol) sorted by createdAt desc.
+tradeSchema.index({ userId: 1, createdAt: -1 });
+
 module.exports = mongoose.model('Trade', tradeSchema);

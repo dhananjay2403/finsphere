@@ -18,12 +18,6 @@ const portfolioService = {
     return response.data.data;
   },
 
-  // GET /api/portfolio/cash
-  getCash: async () => {
-    const response = await api.get('/portfolio/cash');
-    return response.data.data;
-  },
-
   // GET /api/portfolio/snapshots — last 90 days; also triggers today's
   // snapshot write on the backend (non-fatal if it fails)
   getSnapshots: async () => {

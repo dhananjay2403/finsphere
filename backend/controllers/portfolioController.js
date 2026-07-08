@@ -1,6 +1,7 @@
 const Holding          = require('../models/Holding');
 const PortfolioSnapshot = require('../models/PortfolioSnapshot');
 const stockService     = require('../services/stockService');
+const { INITIAL_BALANCE } = require('../utils/constants');
 
 
 // Fetches a live quote per holding. Promise.allSettled so one bad quote
@@ -130,6 +131,9 @@ const getSummary = async (req, res, next) => {
     const holdings    = await Holding.find({ userId: req.user._id }).lean();
 
     if (holdings.length === 0) {
+      // No open positions — account value is pure cash. Account-level P&L still
+      // captures any realised gains/losses banked into the cash balance.
+      const totalPnL = parseFloat((cashBalance - INITIAL_BALANCE).toFixed(2));
       return res.status(200).json({
         success: true,
         data: {
@@ -138,6 +142,8 @@ const getSummary = async (req, res, next) => {
           currentValue:   0,
           totalReturn:    0,
           totalReturnPct: 0,
+          totalPnL,
+          totalPnLPct:    parseFloat(((totalPnL / INITIAL_BALANCE) * 100).toFixed(2)),
           portfolioValue: cashBalance,
         },
       });
@@ -162,10 +168,19 @@ const getSummary = async (req, res, next) => {
 
     totalInvested  = parseFloat(totalInvested.toFixed(2));
     currentValue   = parseFloat(currentValue.toFixed(2));
+
+    // Unrealised P&L — return on capital tied up in currently-open positions.
     const totalReturn    = parseFloat((currentValue - totalInvested).toFixed(2));
     const totalReturnPct = totalInvested > 0
       ? parseFloat(((totalReturn / totalInvested) * 100).toFixed(2))
       : 0;
+
+    const portfolioValue = parseFloat((cashBalance + currentValue).toFixed(2));
+
+    // Account-level P&L — total return since inception vs the fixed $100k start
+    // (there are no deposits/withdrawals, so this is realised + unrealised).
+    const totalPnL    = parseFloat((portfolioValue - INITIAL_BALANCE).toFixed(2));
+    const totalPnLPct = parseFloat(((totalPnL / INITIAL_BALANCE) * 100).toFixed(2));
 
     return res.status(200).json({
       success: true,
@@ -175,7 +190,9 @@ const getSummary = async (req, res, next) => {
         currentValue,
         totalReturn,
         totalReturnPct,
-        portfolioValue: parseFloat((cashBalance + currentValue).toFixed(2)),
+        totalPnL,
+        totalPnLPct,
+        portfolioValue,
       },
     });
   }

@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { Box, Container, Typography, Grid, Paper, Chip, Button, Skeleton } from '@mui/material';
+import { Box, Container, Typography, Grid, Paper, Chip, Button, Skeleton, Alert } from '@mui/material';
 import { useNavigate } from 'react-router-dom';
 import {
   ResponsiveContainer,
@@ -35,13 +35,8 @@ const BADGE_STYLES = {
 // Segment palette — cycles for up to 6 allocation slices
 const ALLOC_COLORS = ['#7A3E48', '#C88C96', '#B07A61', '#E8DED5', '#9D5F6B', '#D4A0A8'];
 
-// Health score sub-metric definitions — scores derived from real portfolio data
-const HEALTH_METRIC_LABELS = [
-  'Diversification',
-  'Cash Management',
-  'Activity',
-  'Concentration',
-];
+// Health score sub-metric labels (used for the loading placeholder).
+const HEALTH_METRIC_LABELS = ['Diversification', 'Concentration', 'Deployment'];
 
 // Challenge config
 const CHALLENGE_TOTAL = 30;
@@ -52,57 +47,91 @@ function getHealthLabel(score) {
   if (score >= 80) return { text: 'Excellent', color: '#15803d' };
   if (score >= 60) return { text: 'Good', color: '#7A3E48' };
   if (score >= 40) return { text: 'Moderate', color: '#b45309' };
-  return { text: 'Poor', color: '#dc2626' };
+  return { text: 'Needs work', color: '#dc2626' };
 }
 
-// Portfolio health score, 0-100 across four axes: how many holdings (more
-// is better), how much cash is deployed (healthy band is 20-50%), how
-// active the account is (more trades = higher score), and concentration
-// risk (one giant position scores worse than several even ones).
-function computeHealthScore({ holdings, summary, tradeCount }) {
-  const count = holdings?.length ?? 0;
-  const totalInvested = summary?.totalInvested ?? 0;
-  const cashBalance = summary?.cashBalance ?? 0;
-  const portfolioVal = summary?.portfolioValue ?? cashBalance;
+const clampScore = (n) => Math.max(0, Math.min(100, n));
 
-  // Diversification: 0 holdings = 0, 10+ holdings = 100
-  const divScore = Math.min(100, Math.round((count / 10) * 100));
+// Component weights — sum to 1. Kept as a named constant so the methodology is
+// explicit and easy to tune.
+const HEALTH_WEIGHTS = { diversification: 0.40, concentration: 0.30, deployment: 0.30 };
 
-  // Cash Management: measures how well deployed capital is balanced.
-  // Ideal: 20–50% of portfolio is in stocks (investedRatio = 0.2–0.5).
-  // A fresh account (all cash, nothing invested) scores 0 — it's just
-  // starting out.  A fully-deployed account (no cash reserve) also scores
-  // lower because it has no liquidity cushion.
-  // Formula: peak at investedRatio = 0.35 (midpoint of ideal band).
-  const investedRatio = portfolioVal > 0 ? totalInvested / portfolioVal : 0;
-  const cashDelta = Math.abs(investedRatio - 0.35); // 35% invested = ideal
-  const cashScore = count === 0
-    ? 0 // no holdings → not started yet, neutral-zero rather than penalised
-    : Math.max(0, Math.round(100 - cashDelta * 250));
+// Portfolio Health Score (0–100). Measures portfolio *construction and risk*,
+// and is deliberately independent of investment performance — returns are
+// market outcomes (luck/skill), not structural health, so a sound portfolio
+// can be temporarily down and still score well. Three deterministic axes:
+//
+//   Diversification (40%) — how evenly spread across positions, via the
+//     Herfindahl-Hirschman Index. wᵢ = position market value / total holdings
+//     value; HHI = Σwᵢ²; effective number of holdings N_eff = 1/HHI. Scored
+//     against a target of 5 effective positions (realistic on the free-tier
+//     tradable universe): (N_eff − 1)/(5 − 1) × 100.
+//
+//   Concentration risk (30%) — a hard cap on single-name exposure. With the
+//     largest position weight maxW: (1 − maxW)/(1 − 0.30) × 100, so a position
+//     over 30% of holdings starts losing points and ~100% weight scores 0.
+//
+//   Capital deployment (30%) — rewards putting cash to work while keeping a
+//     liquidity buffer. r = holdings value / portfolio value. Ideal band
+//     50–90% → 100; below 50% scales linearly (r / 0.50); above 90% a mild
+//     penalty down to 70 at fully invested (no cash cushion).
+//
+// Weights use market value (currentValue), falling back to cost basis when a
+// live quote is missing. An empty portfolio is "Not rated" rather than 0.
+function computeHealthScore({ holdings, summary }) {
+  const list = holdings ?? [];
 
-  // Activity: 0 trades = 0, 20+ trades = 100
-  const activityScore = Math.min(100, Math.round((tradeCount / 20) * 100));
-
-  // Concentration: measures position risk.
-  // No holdings → 100 (no concentration risk yet).
-  // 1 holding at 100% weight → 0.
-  // The ×1.2 multiplier so that 5 equal positions (20% each) → 96.
-  let concScore = 100;
-  if (count > 0 && totalInvested > 0) {
-    const maxWeight = Math.max(...(holdings.map((h) => h.totalInvested / totalInvested)));
-    concScore = Math.max(0, Math.min(100, Math.round((1 - maxWeight) * 100 * 1.2)));
+  if (list.length === 0) {
+    return {
+      rated: false,
+      total: 0,
+      metrics: HEALTH_METRIC_LABELS.map((label) => ({ label, score: 0 })),
+    };
   }
 
-  const metrics = [
-    { label: 'Diversification',  score: divScore },
-    { label: 'Cash Management',  score: cashScore },
-    { label: 'Activity',         score: activityScore },
-    { label: 'Concentration',    score: concScore },
-  ];
+  // Market-value weight per position (cost-basis fallback when no live quote).
+  const values = list.map((h) => (h.currentValue != null ? h.currentValue : h.totalInvested) || 0);
+  const holdingsValue = values.reduce((s, v) => s + v, 0);
+  const weights = holdingsValue > 0 ? values.map((v) => v / holdingsValue) : values.map(() => 0);
 
-  const total = Math.round(metrics.reduce((s, m) => s + m.score, 0) / metrics.length);
+  // Diversification — effective number of holdings (1 / HHI) vs a target of 5.
+  const hhi = weights.reduce((s, w) => s + w * w, 0);
+  const nEff = hhi > 0 ? 1 / hhi : 0;
+  const TARGET_HOLDINGS = 5;
+  const diversification = clampScore(((nEff - 1) / (TARGET_HOLDINGS - 1)) * 100);
 
-  return { total, metrics };
+  // Concentration risk — largest single-position weight, capped at 30% ideal.
+  const maxWeight = weights.length ? Math.max(...weights) : 1;
+  const MAX_IDEAL_WEIGHT = 0.30;
+  const concentration = clampScore(((1 - maxWeight) / (1 - MAX_IDEAL_WEIGHT)) * 100);
+
+  // Capital deployment — reward being invested while keeping a cash buffer.
+  const portfolioValue = summary?.portfolioValue ?? (summary?.cashBalance ?? 0) + holdingsValue;
+  const investedRatio = portfolioValue > 0 ? holdingsValue / portfolioValue : 0;
+  let deployment;
+  if (investedRatio < 0.50) {
+    deployment = clampScore((investedRatio / 0.50) * 100);
+  } else if (investedRatio <= 0.90) {
+    deployment = 100;
+  } else {
+    deployment = clampScore(100 - ((investedRatio - 0.90) / 0.10) * 30); // 90%→100, 100%→70
+  }
+
+  const total = Math.round(
+    diversification * HEALTH_WEIGHTS.diversification +
+    concentration  * HEALTH_WEIGHTS.concentration +
+    deployment     * HEALTH_WEIGHTS.deployment
+  );
+
+  return {
+    rated: true,
+    total,
+    metrics: [
+      { label: 'Diversification', score: Math.round(diversification) },
+      { label: 'Concentration',   score: Math.round(concentration) },
+      { label: 'Deployment',      score: Math.round(deployment) },
+    ],
+  };
 }
 
 // Top 3 holdings by amount invested, for the dashboard allocation panel.
@@ -319,17 +348,19 @@ function Dashboard() {
   const [summaryLoading, setSummaryLoading] = useState(true);
   const [holdingsLoading, setHoldingsLoading] = useState(true);
   const [tradesLoading, setTradesLoading] = useState(true);
+  const [loadError, setLoadError] = useState(false);
 
 
-  // Fetch on mount 
+  // Fetch on mount
   const fetchAll = useCallback(async () => {
-    // Fire all requests in parallel — independent of each other
-    const [summaryResult, holdingsResult, tradesResult, allTradesResult, snapshotsResult] =
+    // Fire all requests in parallel — independent of each other. Trade history
+    // is fetched once (limit 100); the recent-5 panel is sliced from it rather
+    // than making a second, redundant request.
+    const [summaryResult, holdingsResult, allTradesResult, snapshotsResult] =
       await Promise.allSettled([
         portfolioService.getSummary(),
         portfolioService.getHoldings(),
-        tradeService.getHistory({ limit: 5, page: 1 }),        // recent 5 for the panel
-        tradeService.getHistory({ limit: 100, page: 1 }),      // all for chart + health
+        tradeService.getHistory({ limit: 100, page: 1 }),      // all → chart, health, recent-5
         portfolioService.getSnapshots(),                        // performance chart history
       ]);
 
@@ -339,11 +370,21 @@ function Dashboard() {
     if (holdingsResult.status === 'fulfilled') setHoldings(holdingsResult.value);
     setHoldingsLoading(false);
 
-    if (tradesResult.status === 'fulfilled') setRecentTrades(tradesResult.value.data);
-    if (allTradesResult.status === 'fulfilled') setAllTrades(allTradesResult.value.data);
+    if (allTradesResult.status === 'fulfilled') {
+      const all = allTradesResult.value.data;
+      setAllTrades(all);
+      setRecentTrades(all.slice(0, 5));
+    }
     setTradesLoading(false);
 
     if (snapshotsResult.status === 'fulfilled') setSnapshots(snapshotsResult.value);
+
+    // Surface a failure of any primary panel (snapshots are non-critical, so a
+    // snapshot-only failure doesn't trigger the banner). Without this, a failed
+    // load renders identically to a brand-new empty account.
+    setLoadError(
+      [summaryResult, holdingsResult, allTradesResult].some((r) => r.status === 'rejected')
+    );
   }, []);
 
   useEffect(() => { fetchAll(); }, [fetchAll]);
@@ -352,9 +393,11 @@ function Dashboard() {
   // Derived values 
   const isLoading = summaryLoading || holdingsLoading || tradesLoading;
 
-  // KPI badges
-  const gainLoss = summary?.totalReturn ?? 0;
-  const gainLossPct = summary?.totalReturnPct ?? 0;
+  // KPI badges — account-level return since inception (realised + unrealised),
+  // consistent with Portfolio Value = cash + market value. (Per-position
+  // unrealised P/L is shown on the Portfolio page.)
+  const gainLoss = summary?.totalPnL ?? 0;
+  const gainLossPct = summary?.totalPnLPct ?? 0;
   const gainBadge = gainLoss > 0 ? 'positive' : gainLoss < 0 ? 'negative' : 'neutral';
 
   // Allocations (top 3 for dashboard panel)
@@ -362,8 +405,8 @@ function Dashboard() {
 
   // Health score — only compute when data is ready
   const healthData = isLoading
-    ? { total: 0, metrics: HEALTH_METRIC_LABELS.map((l) => ({ label: l, score: 0 })) }
-    : computeHealthScore({ holdings, summary, tradeCount: allTrades.length });
+    ? { rated: false, total: 0, metrics: HEALTH_METRIC_LABELS.map((l) => ({ label: l, score: 0 })) }
+    : computeHealthScore({ holdings, summary });
   const health = getHealthLabel(healthData.total);
 
   // Performance chart — real snapshot data first, trade-math fallback
@@ -392,6 +435,12 @@ function Dashboard() {
           Here&apos;s your portfolio overview
         </Typography>
       </Box>
+
+      {loadError && (
+        <Alert severity="error" sx={{ mb: 3, borderRadius: 1.5 }} onClose={() => setLoadError(false)}>
+          Some dashboard data couldn&apos;t be loaded. Figures may be incomplete — please refresh.
+        </Alert>
+      )}
 
       {/* KPI cards */}
       <Grid container spacing={2} sx={{ mb: 3 }}>
@@ -640,7 +689,7 @@ function Dashboard() {
                   Portfolio Health Score
                 </Typography>
                 <Typography variant="caption" color="text.secondary">
-                  Based on diversification, risk, and activity
+                  Based on diversification, concentration risk, and capital deployment
                 </Typography>
               </Box>
               <FavoriteIcon sx={{ fontSize: 18, color: 'primary.main', opacity: 0.6 }} />
@@ -651,12 +700,28 @@ function Dashboard() {
                 <Skeleton width={80} height={40} animation="wave" sx={{ mb: 1.5 }} />
                 <Skeleton variant="rectangular" height={6} sx={{ borderRadius: 3, mb: 2.5 }} animation="wave" />
                 <Grid container spacing={1}>
-                  {[1, 2, 3, 4].map((i) => (
-                    <Grid item xs={6} key={i}>
+                  {[1, 2, 3].map((i) => (
+                    <Grid item xs={4} key={i}>
                       <Skeleton variant="rectangular" height={52} sx={{ borderRadius: 1.5 }} animation="wave" />
                     </Grid>
                   ))}
                 </Grid>
+              </Box>
+            ) : !healthData.rated ? (
+              <Box sx={{ display: 'flex', flexDirection: 'column', flexGrow: 1, justifyContent: 'center', py: 2 }}>
+                <Box sx={{ display: 'flex', alignItems: 'baseline', gap: 1, mb: 1.5 }}>
+                  <Typography variant="h4" fontWeight={700} color="text.secondary">—</Typography>
+                  <Typography variant="body2" color="text.secondary">/ 100</Typography>
+                  <Chip
+                    label="Not rated"
+                    size="small"
+                    sx={{ ml: 'auto', bgcolor: '#f1f5f9', color: '#64748b', fontWeight: 600, fontSize: '0.72rem', height: 22 }}
+                  />
+                </Box>
+                <Typography variant="body2" color="text.secondary">
+                  Buy your first stock to generate a health score based on diversification,
+                  concentration risk, and capital deployment.
+                </Typography>
               </Box>
             ) : (
               <>
@@ -686,7 +751,7 @@ function Dashboard() {
                 {/* Sub-metrics */}
                 <Grid container spacing={1.5}>
                   {healthData.metrics.map(({ label, score }) => (
-                    <Grid item xs={6} key={label}>
+                    <Grid item xs={4} key={label}>
                       <Box sx={{ p: 2, bgcolor: '#F8F4EF', borderRadius: 1.5 }}>
                         <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 0.5 }}>
                           <Typography variant="caption" color="text.secondary" fontWeight={500} sx={{ fontSize: '0.7rem' }}>

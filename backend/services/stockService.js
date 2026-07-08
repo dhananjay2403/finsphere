@@ -2,7 +2,7 @@ const axios = require('axios');
 // yahoo-finance2 v3: default export is the class — must instantiate before use
 const YahooFinanceClass = require('yahoo-finance2').default;
 const yahooFinance = new YahooFinanceClass();
-const { cacheAside } = require('../config/redis');
+const { cacheAside, cacheGet, cacheSet, logCache } = require('../config/redis');
 
 // All Finnhub communication lives here — controllers never touch axios or
 // Finnhub directly, so swapping providers later only means changing this
@@ -14,9 +14,16 @@ const BASE_URL = 'https://finnhub.io/api/v1';
 // Cache TTLs for public market data (quotes, candles, news) — see
 // Milestone 16 for reasoning. Redis is a pure optimisation layer here:
 // cacheAside() degrades to an uncached call if Redis is unreachable.
-const QUOTE_TTL_SECONDS = 10;    // prices move fast — just enough to collapse request bursts
+const QUOTE_TTL_SECONDS = 30;    // portfolio display prices — 30s keeps them fresh while cutting
+                                 // Finnhub call volume ~3x vs 10s (trades bypass the cache for live prices)
 const CANDLE_TTL_SECONDS = 300;  // 5 min — closed historical bars barely change within a session
 const NEWS_TTL_SECONDS = 120;    // 2 min — headlines don't update second-to-second
+
+// "Last known good" quote retention. On a Finnhub failure (esp. a free-tier 429
+// rate limit) we serve the most recent successful price from here instead of
+// letting the quote fail — which would otherwise make the portfolio's market
+// value collapse to cost basis and its gains appear to vanish until a refresh.
+const LAST_QUOTE_TTL_SECONDS = 86_400; // 24h
 
 // Resolved once at module load — fails fast if the key is missing
 const API_KEY = process.env.FINNHUB_API_KEY;
@@ -136,9 +143,49 @@ const getQuote = async (symbol, { skipCache = false } = {}) => {
     };
   };
 
-  if (skipCache) return fetchQuote();
+  const key     = `fs:quote:${symbolUpper}`;
+  const lastKey = `fs:quote:last:${symbolUpper}`;
 
-  return cacheAside(`fs:quote:${symbolUpper}`, QUOTE_TTL_SECONDS, fetchQuote);
+  // Trade execution must always price against a live quote, never the cache.
+  if (skipCache) {
+    logCache('BYPASS', key);
+    const fresh = await fetchQuote();
+    // still refresh the "last known good" cache so display paths benefit
+    cacheSet(lastKey, JSON.stringify(fresh), LAST_QUOTE_TTL_SECONDS);
+    return fresh;
+  }
+
+  // 1) Serve a fresh cached quote if we have one.
+  const cached = await cacheGet(key);
+  if (cached !== null) {
+    try {
+      logCache('HIT', key);
+      return JSON.parse(cached);
+    } catch { /* corrupt value — fall through to a live fetch */ }
+  }
+
+  // 2) Cache miss — fetch live, and remember it as both the short-lived quote
+  //    and the long-lived "last known good" price.
+  logCache('MISS', key);
+  try {
+    const fresh = await fetchQuote();
+    await cacheSet(key, JSON.stringify(fresh), QUOTE_TTL_SECONDS);
+    await cacheSet(lastKey, JSON.stringify(fresh), LAST_QUOTE_TTL_SECONDS);
+    return fresh;
+  } catch (err) {
+    // 3) Live fetch failed (typically a free-tier 429). Rather than let the
+    //    caller fall back to cost basis — which makes gains appear to vanish —
+    //    serve the last known good price if we have one. A 404 (unknown
+    //    symbol) has no last-good price and correctly propagates.
+    const last = await cacheGet(lastKey);
+    if (last !== null) {
+      try {
+        logCache('STALE', key);
+        return JSON.parse(last);
+      } catch { /* corrupt — fall through to rethrow */ }
+    }
+    throw err;
+  }
 };
 
 

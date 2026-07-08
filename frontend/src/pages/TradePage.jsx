@@ -15,7 +15,7 @@ import {
   Alert,
   Skeleton,
   List,
-  ListItem,
+  ListItemButton,
   ListItemAvatar,
   ListItemText,
   ClickAwayListener,
@@ -528,9 +528,8 @@ function TradePage() {
                   >
                     <List dense disablePadding>
                       {searchResults.map((result) => (
-                        <ListItem
+                        <ListItemButton
                           key={result.symbol}
-                          button
                           onClick={() => handleSelectStock(result)}
                           sx={{
                             py: 1.25,
@@ -565,7 +564,7 @@ function TradePage() {
                               </Typography>
                             }
                           />
-                        </ListItem>
+                        </ListItemButton>
                       ))}
                     </List>
                   </Paper>
@@ -991,6 +990,9 @@ function TradePage() {
                   {watchlist.map(({ symbol, name }) => (
                     <Box
                       key={symbol}
+                      role="button"
+                      tabIndex={0}
+                      aria-label={`View ${symbol}`}
                       sx={{
                         display: 'flex',
                         alignItems: 'center',
@@ -1001,10 +1003,17 @@ function TradePage() {
                         '&:last-child': { borderBottom: 'none' },
                         cursor: 'pointer',
                         '&:hover': { bgcolor: '#fafafa' },
+                        '&:focus-visible': { outline: '2px solid', outlineColor: 'primary.main', outlineOffset: -2 },
                         borderRadius: 1,
                         px: 0.5,
                       }}
                       onClick={() => handleClickWatchlistItem({ symbol, name })}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' || e.key === ' ') {
+                          e.preventDefault();
+                          handleClickWatchlistItem({ symbol, name });
+                        }
+                      }}
                     >
                       <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
                         <Avatar

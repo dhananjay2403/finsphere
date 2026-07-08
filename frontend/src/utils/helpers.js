@@ -19,23 +19,6 @@ export function formatPercent(value) {
   return `${sign}${n.toFixed(2)}%`;
 }
 
-// Calculates percentage change between two values
-export function calcPercentChange(current, original) {
-
-  if (!original || original === 0) return 0;
-  return ((current - original) / Math.abs(original)) * 100;
-}
-
-// Formats a date to short readable form (e.g. "Jun 21, 2026")
-export function formatDate(date) {
-
-  return new Intl.DateTimeFormat('en-US', {
-    month: 'short',
-    day: 'numeric',
-    year: 'numeric',
-  }).format(new Date(date));
-}
-
 // Returns relative time string (e.g. "3 hours ago")
 export function timeAgo(date) {
 

@@ -355,28 +355,29 @@ function Transactions() {
   return (
     <Container maxWidth="lg" sx={{ py: 4 }}>
 
+      {/* Back to dashboard — pinned left, flush with the container edge across
+          all breakpoints (kept out of the centered header block below). */}
+      <Box sx={{ mb: 1 }}>
+        <Button
+          size="small"
+          startIcon={<ArrowBackIcon sx={{ fontSize: 14 }} />}
+          onClick={() => navigate(ROUTES.DASHBOARD)}
+          sx={{
+            color: 'text.secondary',
+            fontWeight: 500,
+            fontSize: '0.8rem',
+            minWidth: 0,
+            px: 0,
+            py: 0.5,
+            '&:hover': { bgcolor: 'transparent', color: 'primary.main' },
+          }}
+        >
+          Dashboard
+        </Button>
+      </Box>
+
       {/* Page header — centered */}
       <Box sx={{ mb: 4, textAlign: 'center' }}>
-        {/* Back breadcrumb */}
-        <Box sx={{ display: 'flex', justifyContent: 'center', mb: 1 }}>
-          <Button
-            size="small"
-            startIcon={<ArrowBackIcon sx={{ fontSize: 14 }} />}
-            onClick={() => navigate(ROUTES.DASHBOARD)}
-            sx={{
-              color: 'text.secondary',
-              fontWeight: 500,
-              fontSize: '0.8rem',
-              minWidth: 0,
-              px: 1,
-              py: 0.5,
-              '&:hover': { bgcolor: 'rgba(122, 62, 72, 0.04)', color: 'primary.main' },
-            }}
-          >
-            Dashboard
-          </Button>
-        </Box>
-
         <Typography variant="h4" fontWeight={700} letterSpacing="-0.025em">
           Transactions
         </Typography>

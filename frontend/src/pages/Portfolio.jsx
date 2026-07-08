@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import {
   Box,
   Container,
@@ -8,10 +8,22 @@ import {
   Skeleton,
   Chip,
   Alert,
+  Select,
+  MenuItem,
+  IconButton,
+  Table,
+  TableBody,
+  TableCell,
+  TableContainer,
+  TableHead,
+  TableRow,
+  TableSortLabel,
 } from '@mui/material';
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from 'recharts';
 import PieChartIcon from '@mui/icons-material/PieChart';
 import AccountBalanceWalletIcon from '@mui/icons-material/AccountBalanceWallet';
+import ArrowUpwardIcon from '@mui/icons-material/ArrowUpward';
+import ArrowDownwardIcon from '@mui/icons-material/ArrowDownward';
 import { formatCurrency, formatPercent } from '../utils/helpers';
 import portfolioService from '../services/portfolioService';
 
@@ -26,6 +38,18 @@ const SEGMENT_COLORS = [
   '#D4A0A8',
   '#C49A7A',
 ];
+
+
+// Gain/green, loss/red — matches the convention used across the app. (The MUI
+// theme also exposes success/error tokens, but with different hues; unifying
+// those is tracked as future work to avoid a visual regression here.)
+const GAIN_COLOR = '#15803d';
+const LOSS_COLOR = '#dc2626';
+function pnlColor(value) {
+  if (value > 0) return GAIN_COLOR;
+  if (value < 0) return LOSS_COLOR;
+  return 'text.primary';
+}
 
 
 // Helpers
@@ -86,106 +110,202 @@ function AllocationTooltip({ active, payload }) {
   );
 }
 
-function HoldingRow({ holding, isLast }) {
+// Max height of the scrollable holdings area, so the card stays a consistent
+// height as positions are added rather than growing without bound.
+const HOLDINGS_MAX_HEIGHT = 428;
+
+// Sortable columns — `key` maps to a field on each holding. `sortLabel` is the
+// friendlier wording used in the mobile "Sort by" dropdown.
+const HOLDING_COLUMNS = [
+  { label: 'Stock',     sortLabel: 'Alphabetical',  key: 'symbol',        align: 'left' },
+  { label: 'Qty',       sortLabel: 'Quantity',      key: 'quantity',      align: 'right' },
+  { label: 'Avg Cost',  sortLabel: 'Avg Cost',      key: 'avgCostPrice',  align: 'right' },
+  { label: 'Mkt Value', sortLabel: 'Market Value',  key: 'currentValue',  align: 'right' },
+  { label: 'P/L',       sortLabel: 'Profit / Loss', key: 'unrealisedPnL', align: 'right' },
+];
+
+const DEFAULT_SORT = { key: 'currentValue', dir: 'desc' };
+
+// Returns holdings sorted by the active key/direction. Symbol sorts
+// alphabetically; numeric columns sort by value with missing quotes (null)
+// always pushed to the bottom regardless of direction.
+function sortHoldings(holdings, { key, dir }) {
+  const sorted = [...holdings];
+  sorted.sort((a, b) => {
+    if (key === 'symbol') {
+      return dir === 'asc'
+        ? a.symbol.localeCompare(b.symbol)
+        : b.symbol.localeCompare(a.symbol);
+    }
+    const av = a[key];
+    const bv = b[key];
+    const aNull = av == null;
+    const bNull = bv == null;
+    if (aNull && bNull) return 0;
+    if (aNull) return 1;   // nulls last
+    if (bNull) return -1;
+    return dir === 'asc' ? av - bv : bv - av;
+  });
+  return sorted;
+}
+
+// Desktop holdings table. A real <table> gives every column a shared width, so
+// headers line up perfectly with the values below them; a sticky header + a
+// scrollable container keeps the card a fixed height as positions grow.
+const headCellSx = {
+  bgcolor: 'white',
+  borderBottom: '2px solid',
+  borderColor: 'divider',
+  color: 'text.secondary',
+  fontSize: '0.66rem',
+  fontWeight: 600,
+  textTransform: 'uppercase',
+  letterSpacing: '0.02em',
+  py: 1,
+  px: 0.5,
+  whiteSpace: 'nowrap',
+};
+
+// Compact body-cell padding so all five columns fit the narrow lg panel
+// without a horizontal scrollbar hiding the P/L column.
+const bodyCellSx = { px: 0.5 };
+
+function HoldingsTable({ holdings, sort, onSort }) {
   return (
-    <Box
-      sx={{
-        display: 'grid',
-        gridTemplateColumns: '1fr auto auto auto',
-        gap: 1,
-        alignItems: 'center',
-        py: 1.5,
-        borderBottom: isLast ? 'none' : '1px solid',
-        borderColor: 'divider',
-      }}
-    >
-      <Box>
-        <Typography variant="body2" fontWeight={600} lineHeight={1.2}>
-          {holding.symbol}
-        </Typography>
-        <Typography variant="caption" color="text.secondary" noWrap sx={{ maxWidth: 160, display: 'block' }}>
-          {holding.name}
-        </Typography>
-      </Box>
-      <Box sx={{ textAlign: 'right', minWidth: 50 }}>
-        <Typography variant="caption" color="text.secondary" sx={{ display: 'block', fontSize: '0.65rem', mb: 0.25 }}>
-          Qty
-        </Typography>
-        <Typography variant="body2" fontWeight={600}>{holding.quantity}</Typography>
-      </Box>
-      <Box sx={{ textAlign: 'right', minWidth: 70 }}>
-        <Typography variant="caption" color="text.secondary" sx={{ display: 'block', fontSize: '0.65rem', mb: 0.25 }}>
-          Avg Cost
-        </Typography>
-        <Typography variant="body2" fontWeight={600}>
-          ${holding.avgCostPrice?.toFixed(2)}
-        </Typography>
-      </Box>
-      <Box sx={{ textAlign: 'right', minWidth: 80 }}>
-        <Typography variant="caption" color="text.secondary" sx={{ display: 'block', fontSize: '0.65rem', mb: 0.25 }}>
-          Invested
-        </Typography>
-        <Typography variant="body2" fontWeight={600} color="primary.main">
-          {formatCurrency(holding.totalInvested)}
-        </Typography>
-      </Box>
-    </Box>
+    <TableContainer sx={{ maxHeight: HOLDINGS_MAX_HEIGHT }}>
+      <Table stickyHeader size="small" aria-label="Holdings">
+        <TableHead>
+          <TableRow>
+            {HOLDING_COLUMNS.map(({ label, key, align }) => (
+              <TableCell
+                key={key}
+                align={align === 'left' ? 'left' : 'center'}
+                sortDirection={sort.key === key ? sort.dir : false}
+                sx={headCellSx}
+              >
+                <TableSortLabel
+                  active={sort.key === key}
+                  direction={sort.key === key ? sort.dir : 'asc'}
+                  onClick={() => onSort(key)}
+                >
+                  {label}
+                </TableSortLabel>
+              </TableCell>
+            ))}
+          </TableRow>
+        </TableHead>
+        <TableBody>
+          {holdings.map((h) => {
+            const hasQuote = h.currentValue != null;
+            const pnl = h.unrealisedPnL;
+            return (
+              <TableRow key={h._id} hover>
+                <TableCell sx={bodyCellSx}>
+                  <Typography variant="body2" fontWeight={600} lineHeight={1.2}>{h.symbol}</Typography>
+                  <Typography variant="caption" color="text.secondary" noWrap sx={{ display: 'block', maxWidth: 118 }}>
+                    {h.name}
+                  </Typography>
+                </TableCell>
+                <TableCell align="center" sx={bodyCellSx}>
+                  <Typography variant="body2" fontWeight={600}>{h.quantity}</Typography>
+                </TableCell>
+                <TableCell align="center" sx={bodyCellSx}>
+                  <Typography variant="body2" fontWeight={600}>${h.avgCostPrice?.toFixed(2)}</Typography>
+                </TableCell>
+                <TableCell align="center" sx={bodyCellSx}>
+                  <Typography variant="body2" fontWeight={600}>
+                    {hasQuote ? formatCurrency(h.currentValue) : '—'}
+                  </Typography>
+                </TableCell>
+                <TableCell align="center" sx={bodyCellSx}>
+                  {hasQuote ? (
+                    <>
+                      <Typography variant="body2" fontWeight={600} sx={{ color: pnlColor(pnl) }}>
+                        {pnl > 0 ? '+' : ''}{formatCurrency(pnl)}
+                      </Typography>
+                      <Typography variant="caption" sx={{ color: pnlColor(pnl), display: 'block', fontSize: '0.68rem' }}>
+                        {formatPercent(h.unrealisedPnLPct)}
+                      </Typography>
+                    </>
+                  ) : (
+                    <Typography variant="body2" fontWeight={600}>—</Typography>
+                  )}
+                </TableCell>
+              </TableRow>
+            );
+          })}
+        </TableBody>
+      </Table>
+    </TableContainer>
   );
 }
 
-function HoldingRowSkeleton() {
+function HoldingsTableSkeleton() {
   return (
-    <Box
-      sx={{
-        display: 'grid',
-        gridTemplateColumns: '1fr auto auto auto',
-        gap: 1,
-        alignItems: 'center',
-        py: 1.5,
-        borderBottom: '1px solid',
-        borderColor: 'divider',
-      }}
-    >
-      <Box>
-        <Skeleton width={50} height={16} animation="wave" />
-        <Skeleton width={100} height={12} animation="wave" sx={{ mt: 0.25 }} />
-      </Box>
-      <Skeleton width={30} height={16} animation="wave" />
-      <Skeleton width={55} height={16} animation="wave" />
-      <Skeleton width={70} height={16} animation="wave" />
-    </Box>
+    <TableContainer>
+      <Table size="small">
+        <TableHead>
+          <TableRow>
+            {HOLDING_COLUMNS.map(({ label, align }) => (
+              <TableCell key={label} align={align === 'left' ? 'left' : 'center'} sx={headCellSx}>
+                {label}
+              </TableCell>
+            ))}
+          </TableRow>
+        </TableHead>
+        <TableBody>
+          {[1, 2, 3].map((i) => (
+            <TableRow key={i}>
+              <TableCell sx={bodyCellSx}>
+                <Skeleton width={50} height={16} animation="wave" />
+                <Skeleton width={100} height={12} animation="wave" sx={{ mt: 0.25 }} />
+              </TableCell>
+              {[24, 48, 60, 64].map((w) => (
+                <TableCell key={w} align="center" sx={bodyCellSx}>
+                  <Skeleton width={w} height={16} animation="wave" sx={{ mx: 'auto' }} />
+                </TableCell>
+              ))}
+            </TableRow>
+          ))}
+        </TableBody>
+      </Table>
+    </TableContainer>
   );
 }
 
-function HoldingsTableHeader() {
+// Stacked card for narrow screens — keeps long company names from overflowing
+// the panel by truncating the name and pinning the numbers to the right.
+function HoldingCardMobile({ holding, isLast }) {
+  const hasQuote = holding.currentValue != null;
+  const pnl = holding.unrealisedPnL;
   return (
-    <Box
-      sx={{
-        display: 'grid',
-        gridTemplateColumns: '1fr auto auto auto',
-        gap: 1,
-        pb: 1,
-        borderBottom: '2px solid',
-        borderColor: 'divider',
-        mb: 0.5,
-      }}
-    >
-      {['Stock', 'Qty', 'Avg Cost', 'Invested'].map((h) => (
-        <Typography
-          key={h}
-          variant="caption"
-          color="text.secondary"
-          fontWeight={600}
-          sx={{
-            textAlign: h === 'Stock' ? 'left' : 'right',
-            fontSize: '0.68rem',
-            textTransform: 'uppercase',
-            letterSpacing: '0.04em',
-          }}
-        >
-          {h}
+    <Box sx={{ py: 1.5, borderBottom: isLast ? 'none' : '1px solid', borderColor: 'divider' }}>
+      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 1.5, mb: 1 }}>
+        <Box sx={{ minWidth: 0 }}>
+          <Typography variant="body2" fontWeight={700} lineHeight={1.2}>{holding.symbol}</Typography>
+          <Typography variant="caption" color="text.secondary" noWrap sx={{ display: 'block' }}>
+            {holding.name}
+          </Typography>
+        </Box>
+        <Box sx={{ textAlign: 'right', flexShrink: 0 }}>
+          <Typography variant="body2" fontWeight={700}>
+            {hasQuote ? formatCurrency(holding.currentValue) : '—'}
+          </Typography>
+          {hasQuote && (
+            <Typography variant="caption" sx={{ color: pnlColor(pnl), display: 'block', fontSize: '0.7rem' }}>
+              {pnl > 0 ? '+' : ''}{formatCurrency(pnl)} ({formatPercent(holding.unrealisedPnLPct)})
+            </Typography>
+          )}
+        </Box>
+      </Box>
+      <Box sx={{ display: 'flex', gap: 2.5 }}>
+        <Typography variant="caption" color="text.secondary">
+          Qty <Box component="span" sx={{ color: 'text.primary', fontWeight: 600 }}>{holding.quantity}</Box>
         </Typography>
-      ))}
+        <Typography variant="caption" color="text.secondary">
+          Avg <Box component="span" sx={{ color: 'text.primary', fontWeight: 600 }}>${holding.avgCostPrice?.toFixed(2)}</Box>
+        </Typography>
+      </Box>
     </Box>
   );
 }
@@ -200,6 +320,7 @@ function Portfolio() {
   const [summaryLoading, setSummaryLoading] = useState(true);
   const [holdingsError, setHoldingsError] = useState('');
   const [summaryError, setSummaryError] = useState('');
+  const [sort, setSort] = useState(DEFAULT_SORT);
 
 
   const fetchData = useCallback(async () => {
@@ -228,6 +349,17 @@ function Portfolio() {
 
   const allocationSegments = buildAllocationSegments(holdings);
   const hasHoldings = holdings.length > 0;
+  const sortedHoldings = useMemo(() => sortHoldings(holdings, sort), [holdings, sort]);
+
+  // Toggle direction when re-selecting the active column, otherwise switch to
+  // the new column with a sensible default (A→Z for names, high→low for numbers).
+  const handleSort = useCallback((key) => {
+    setSort((prev) =>
+      prev.key === key
+        ? { key, dir: prev.dir === 'asc' ? 'desc' : 'asc' }
+        : { key, dir: key === 'symbol' ? 'asc' : 'desc' }
+    );
+  }, []);
 
 
   return (
@@ -245,8 +377,8 @@ function Portfolio() {
 
       <Grid container spacing={2.5}>
 
-        {/* ── Left column — Holdings table ── */}
-        <Grid item xs={12} md={12} lg={5}>
+        {/* ── Left column — Holdings table (wider at lg so all 5 columns fit) ── */}
+        <Grid item xs={12} md={12} lg={6}>
           <Paper
             elevation={0}
             sx={{
@@ -274,8 +406,17 @@ function Portfolio() {
 
             {holdingsLoading && !holdingsError && (
               <Box>
-                <HoldingsTableHeader />
-                {[1, 2, 3].map((i) => <HoldingRowSkeleton key={i} />)}
+                <Box sx={{ display: { xs: 'none', md: 'block' } }}>
+                  <HoldingsTableSkeleton />
+                </Box>
+                <Box sx={{ display: { xs: 'block', md: 'none' } }}>
+                  {[1, 2, 3].map((i) => (
+                    <Box key={i} sx={{ py: 1.5, borderBottom: '1px solid', borderColor: 'divider' }}>
+                      <Skeleton width={140} height={18} animation="wave" />
+                      <Skeleton width={90} height={14} animation="wave" sx={{ mt: 0.5 }} />
+                    </Box>
+                  ))}
+                </Box>
               </Box>
             )}
 
@@ -293,14 +434,47 @@ function Portfolio() {
 
             {!holdingsLoading && !holdingsError && hasHoldings && (
               <Box>
-                <HoldingsTableHeader />
-                {holdings.map((holding, idx) => (
-                  <HoldingRow
-                    key={holding._id}
-                    holding={holding}
-                    isLast={idx === holdings.length - 1}
-                  />
-                ))}
+                {/* Mobile sort control — the desktop table uses sortable headers */}
+                <Box sx={{ display: { xs: 'flex', md: 'none' }, alignItems: 'center', gap: 1, mb: 1.5 }}>
+                  <Typography variant="caption" color="text.secondary" sx={{ flexShrink: 0 }}>
+                    Sort by
+                  </Typography>
+                  <Select
+                    size="small"
+                    value={sort.key}
+                    onChange={(e) => setSort({ key: e.target.value, dir: e.target.value === 'symbol' ? 'asc' : 'desc' })}
+                    sx={{ flex: 1, fontSize: '0.8rem', '& .MuiSelect-select': { py: 0.5 } }}
+                  >
+                    {HOLDING_COLUMNS.map(({ key, sortLabel }) => (
+                      <MenuItem key={key} value={key} sx={{ fontSize: '0.8rem' }}>{sortLabel}</MenuItem>
+                    ))}
+                  </Select>
+                  <IconButton
+                    size="small"
+                    onClick={() => setSort((p) => ({ ...p, dir: p.dir === 'asc' ? 'desc' : 'asc' }))}
+                    aria-label={`Sort ${sort.dir === 'asc' ? 'descending' : 'ascending'}`}
+                  >
+                    {sort.dir === 'asc'
+                      ? <ArrowUpwardIcon sx={{ fontSize: 18 }} />
+                      : <ArrowDownwardIcon sx={{ fontSize: 18 }} />}
+                  </IconButton>
+                </Box>
+
+                {/* Desktop sortable table (sticky header + scrolls past HOLDINGS_MAX_HEIGHT) */}
+                <Box sx={{ display: { xs: 'none', md: 'block' } }}>
+                  <HoldingsTable holdings={sortedHoldings} sort={sort} onSort={handleSort} />
+                </Box>
+
+                {/* Mobile stacked cards — scroll once the list gets long */}
+                <Box sx={{ display: { xs: 'block', md: 'none' }, maxHeight: HOLDINGS_MAX_HEIGHT, overflowY: 'auto' }}>
+                  {sortedHoldings.map((holding, idx) => (
+                    <HoldingCardMobile
+                      key={holding._id}
+                      holding={holding}
+                      isLast={idx === sortedHoldings.length - 1}
+                    />
+                  ))}
+                </Box>
               </Box>
             )}
           </Paper>
@@ -351,16 +525,26 @@ function Portfolio() {
                   value: summaryLoading ? null : formatCurrency(summary?.totalInvested ?? 0),
                 },
                 {
+                  label: 'Holdings value',
+                  value: summaryLoading ? null : formatCurrency(summary?.currentValue ?? 0),
+                },
+                {
                   label: 'Portfolio value',
                   value: summaryLoading ? null : formatCurrency(summary?.portfolioValue ?? 0),
                 },
                 {
-                  label: 'Total return',
+                  // Return on capital in currently-open positions only.
+                  label: 'Unrealized P/L',
                   value: summaryLoading ? null : formatCurrency(summary?.totalReturn ?? 0),
                   sub: summaryLoading ? null : formatPercent(summary?.totalReturnPct ?? 0),
-                  color: !summaryLoading && summary
-                    ? summary.totalReturn > 0 ? '#15803d' : summary.totalReturn < 0 ? '#dc2626' : 'text.primary'
-                    : 'text.primary',
+                  color: !summaryLoading && summary ? pnlColor(summary.totalReturn) : 'text.primary',
+                },
+                {
+                  // Account-level return since inception (realised + unrealised).
+                  label: 'Total gain/loss',
+                  value: summaryLoading ? null : formatCurrency(summary?.totalPnL ?? 0),
+                  sub: summaryLoading ? null : formatPercent(summary?.totalPnLPct ?? 0),
+                  color: !summaryLoading && summary ? pnlColor(summary.totalPnL) : 'text.primary',
                 },
               ].map(({ label, value, sub, color }) => (
                 <Box
@@ -390,7 +574,7 @@ function Portfolio() {
         </Grid>
 
         {/* Right column — Allocation (above) + Portfolio Breakdown */}
-        <Grid item xs={12} md={6} lg={4}>
+        <Grid item xs={12} md={6} lg={3}>
           <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
 
             {/* Allocation donut chart — appears first */}

@@ -1,5 +1,5 @@
-import { useState, useEffect } from 'react';
-import { Link, useNavigate, useLocation } from 'react-router-dom';
+import { useState, useEffect, useRef } from 'react';
+import { Link, useNavigate } from 'react-router-dom';
 import {
   Box,
   Paper,
@@ -19,13 +19,6 @@ import authService from '../services/authService';
 import { ROUTES } from '../utils/constants';
 
 
-// Not a secret — this is a shared demo account visible to everyone, no
-// personal data ever touches it.
-const DEMO_EMAIL    = 'demo@finsphere.com';
-const DEMO_PASSWORD = 'Demo@finsphere1';
-const DEMO_NAME     = 'Demo User';
-
-
 function LoginPage() {
   const [formData, setFormData]     = useState({ email: '', password: '' });
   const [showPassword, setShowPassword] = useState(false);
@@ -35,46 +28,19 @@ function LoginPage() {
 
   const { login } = useAuth();
   const navigate  = useNavigate();
-  const location  = useLocation();
-
-  // where the user was headed before being sent to log in, or the dashboard
-  const redirectTo = location.state?.from?.pathname || ROUTES.DASHBOARD;
 
   // Gets a real JWT for the demo account so it behaves exactly like a normal
-  // user — live quotes, trading, watchlist, all of it. Shared across every
-  // visitor on purpose (trades and watchlist persist), so the demo feels
-  // real rather than a mocked-up sandbox.
+  // user — live quotes, trading, watchlist, all of it. A single backend call
+  // ensures the shared account exists, resets it to a clean state, and returns
+  // the token, so this works even on a cold/wiped database.
   const handleDemoLogin = async () => {
     setIsDemoLoading(true);
     setError('');
 
     try {
-      // wipe the shared account first so this session starts clean — trades,
-      // holdings, watchlist, and the $100k balance all reset before login
-      await authService.resetDemo();
-
-      let result;
-      try {
-        // the account usually already exists, so try logging in directly
-        result = await authService.login({ email: DEMO_EMAIL, password: DEMO_PASSWORD });
-      } catch (loginErr) {
-        // anything other than 401 (wrong password, which shouldn't happen)
-        // means the account doesn't exist yet — register it, then log in
-        if (loginErr.response?.status !== 401) {
-          await authService.register({
-            name:     DEMO_NAME,
-            email:    DEMO_EMAIL,
-            password: DEMO_PASSWORD,
-          });
-          result = await authService.login({ email: DEMO_EMAIL, password: DEMO_PASSWORD });
-        } else {
-          throw loginErr;
-        }
-      }
-
-      login(result.user, result.token);
-      navigate(redirectTo, { replace: true });
-
+      const { user, token } = await authService.demoLogin();
+      login(user, token);
+      navigate(ROUTES.DASHBOARD, { replace: true });
     } catch (err) {
       setError('Demo access is temporarily unavailable. Please try again or create a free account.');
     } finally {
@@ -82,11 +48,14 @@ function LoginPage() {
     }
   };
 
-  // Auto-trigger demo login when the URL contains ?demo=true
-  // Useful for sharing a one-click demo link in portfolio READMEs.
+  // Auto-trigger demo login when the URL contains ?demo=true (handy for a
+  // one-click demo link in the README). The ref guards against the effect
+  // firing twice (React StrictMode / remounts) and kicking off two demo flows.
+  const demoAutoTriggered = useRef(false);
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
-    if (params.get('demo') === 'true') {
+    if (params.get('demo') === 'true' && !demoAutoTriggered.current) {
+      demoAutoTriggered.current = true;
       handleDemoLogin();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -110,7 +79,7 @@ function LoginPage() {
     try {
       const { user, token } = await authService.login(formData);
       login(user, token);
-      navigate(redirectTo, { replace: true });
+      navigate(ROUTES.DASHBOARD, { replace: true });
     } catch (err) {
       setError(err.response?.data?.message ?? 'Invalid email or password.');
     } finally {

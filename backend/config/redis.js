@@ -8,6 +8,17 @@ const Redis = require('ioredis');
 
 let client = null;
 
+// Opt-in cache instrumentation. Off by default (zero overhead); set
+// CACHE_DEBUG=true to log every cache HIT / MISS / BYPASS, which makes it easy
+// to confirm from the logs alone that Redis is actually being used in a given
+// environment (prod included) without needing redis-cli.
+const cacheDebug = process.env.CACHE_DEBUG === 'true';
+const logCache = (event, key) => {
+  if (cacheDebug) console.log(`[cache] ${event} ${key}`);
+};
+
+if (cacheDebug) console.log('ℹ Cache debug logging enabled (CACHE_DEBUG=true)');
+
 if (process.env.REDIS_URL) {
   client = new Redis(process.env.REDIS_URL, {
     maxRetriesPerRequest: 1,   // fail a single command fast instead of blocking the request
@@ -52,12 +63,15 @@ const cacheAside = async (key, ttlSeconds, fetchFn) => {
 
   if (cached !== null) {
     try {
-      return JSON.parse(cached);
+      const parsed = JSON.parse(cached);
+      logCache('HIT', key);
+      return parsed;
     } catch (err) {
       console.error(`[redis] corrupt cache value for ${key}, ignoring:`, err.message);
     }
   }
 
+  logCache('MISS', key);
   const fresh = await fetchFn();
   await cacheSet(key, JSON.stringify(fresh), ttlSeconds);
   return fresh;
@@ -68,4 +82,4 @@ const disconnect = async () => {
   await client.quit().catch(() => {});
 };
 
-module.exports = { cacheGet, cacheSet, cacheAside, disconnect };
+module.exports = { cacheGet, cacheSet, cacheAside, logCache, disconnect };

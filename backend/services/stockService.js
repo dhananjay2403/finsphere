@@ -241,7 +241,10 @@ const getNews = async (symbol) => {
       to: fmt(to),
     });
 
-    if (!Array.isArray(data)) return [];
+    if (!Array.isArray(data)) {
+      console.error(`[stockService] getNews: Finnhub returned a non-array payload for ${symbolUpper}:`, JSON.stringify(data)?.slice(0, 200));
+      return [];
+    }
 
     return data
       .slice(0, 20) // Cap at 20 articles
@@ -357,7 +360,10 @@ const getMarketNews = async (category = 'general') => {
   const fetchMarketNews = async () => {
     const data = await callFinnhub('/news', { category });
 
-    if (!Array.isArray(data)) return [];
+    if (!Array.isArray(data)) {
+      console.error(`[stockService] getMarketNews: Finnhub returned a non-array payload for category "${category}":`, JSON.stringify(data)?.slice(0, 200));
+      return [];
+    }
 
     return data
       .filter((article) => article.headline && article.url)    // Skip empty articles

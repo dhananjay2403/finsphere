@@ -42,7 +42,7 @@ const addToWatchlist = async (req, res, next) => {
           },
         },
       },
-      { new: true, upsert: true, lean: true }
+      { returnDocument: 'after', upsert: true, lean: true }
     );
 
     if (!updated) {
@@ -79,7 +79,7 @@ const removeFromWatchlist = async (req, res, next) => {
         'symbols.symbol': upperSymbol, // only matches if it's actually there
       },
       { $pull: { symbols: { symbol: upperSymbol } } },
-      { new: true, lean: true }
+      { returnDocument: 'after', lean: true }
     );
 
     if (!updated) {

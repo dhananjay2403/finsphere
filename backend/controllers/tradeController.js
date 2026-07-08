@@ -44,7 +44,7 @@ const buyStock = async (req, res, next) => {
         const updatedUser = await User.findOneAndUpdate(
           { _id: req.user._id, balance: { $gte: totalAmount } },
           { $inc: { balance: -totalAmount } },
-          { new: true, session, runValidators: true }
+          { returnDocument: 'after', session, runValidators: true }
         );
 
         if (!updatedUser) {
@@ -80,7 +80,7 @@ const buyStock = async (req, res, next) => {
               },
             },
           }],
-          { upsert: true, new: true, session, runValidators: true, updatePipeline: true }
+          { upsert: true, returnDocument: 'after', session, runValidators: true, updatePipeline: true }
         );
 
         const [trade] = await Trade.create([{
@@ -155,7 +155,7 @@ const sellStock = async (req, res, next) => {
         const updatedHolding = await Holding.findOneAndUpdate(
           { userId: req.user._id, symbol: symbolUpper, quantity: { $gte: qty } },
           { $inc: { quantity: -qty } },
-          { new: true, session, runValidators: true }
+          { returnDocument: 'after', session, runValidators: true }
         );
 
         if (!updatedHolding) {
@@ -180,7 +180,7 @@ const sellStock = async (req, res, next) => {
         const updatedUser = await User.findByIdAndUpdate(
           req.user._id,
           { $inc: { balance: totalAmount } },
-          { new: true, session, runValidators: true }
+          { returnDocument: 'after', session, runValidators: true }
         );
 
         const [trade] = await Trade.create([{

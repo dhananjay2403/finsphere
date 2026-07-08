@@ -179,6 +179,13 @@ function HoldingsTable({ holdings, sort, onSort }) {
                   active={sort.key === key}
                   direction={sort.key === key ? sort.dir : 'asc'}
                   onClick={() => onSort(key)}
+                  sx={{
+                    // The sort arrow otherwise sits inline next to the label, pushing the label text off
+                    // true-center on whichever column is active — float it instead so the label centers
+                    // identically to every other (inactive) header and to the body values below it.
+                    position: 'relative',
+                    '& .MuiTableSortLabel-icon': { position: 'absolute', right: -16, margin: 0 },
+                  }}
                 >
                   {label}
                 </TableSortLabel>
@@ -354,7 +361,7 @@ function Portfolio() {
 
 
   return (
-    <Container maxWidth="lg" sx={{ py: 4 }}>
+    <Container maxWidth="xl" sx={{ py: 4 }}>
 
       {/* ── Page header — centered ── */}
       <Box sx={{ mb: 4, textAlign: 'center' }}>
@@ -588,9 +595,11 @@ function Portfolio() {
                   </Typography>
                 </Box>
               ) : (
-                <>
-                  <Box sx={{ display: 'flex', justifyContent: 'center' }}>
-                    <ResponsiveContainer width="100%" height={180}>
+                // Legend sits beside the chart on desktop (md+) instead of stacking below it, so this
+                // card doesn't run taller than it needs to and Portfolio Breakdown lines up with Holdings.
+                <Box sx={{ display: 'flex', flexDirection: { xs: 'column', md: 'row' }, alignItems: 'center', gap: { xs: 1, md: 2 } }}>
+                  <Box sx={{ flexShrink: 0, width: { xs: '100%', md: 150 } }}>
+                    <ResponsiveContainer width="100%" height={150}>
                       <PieChart>
                         <Pie
                           data={allocationSegments}
@@ -598,8 +607,8 @@ function Portfolio() {
                           nameKey="label"
                           cx="50%"
                           cy="50%"
-                          innerRadius={50}
-                          outerRadius={75}
+                          innerRadius={44}
+                          outerRadius={68}
                           paddingAngle={2}
                           strokeWidth={0}
                         >
@@ -611,18 +620,27 @@ function Portfolio() {
                       </PieChart>
                     </ResponsiveContainer>
                   </Box>
-                  {/* Inline legend */}
-                  <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1.5, justifyContent: 'center', mt: 1 }}>
+                  {/* Legend — wraps horizontally on mobile, stacks vertically beside the chart on desktop */}
+                  <Box
+                    sx={{
+                      display: 'flex',
+                      flexDirection: { xs: 'row', md: 'column' },
+                      flexWrap: { xs: 'wrap', md: 'nowrap' },
+                      gap: { xs: 1.5, md: 0.75 },
+                      justifyContent: { xs: 'center', md: 'flex-start' },
+                      width: '100%',
+                    }}
+                  >
                     {allocationSegments.map(({ label, color, pct }) => (
-                      <Box key={label} sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                      <Box key={label} sx={{ display: 'flex', alignItems: 'center', gap: 0.75 }}>
                         <Box sx={{ width: 8, height: 8, borderRadius: '50%', bgcolor: color, flexShrink: 0 }} />
-                        <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.7rem' }}>
-                          {label} {pct}%
+                        <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.7rem', whiteSpace: 'nowrap' }}>
+                          {label} - {pct}%
                         </Typography>
                       </Box>
                     ))}
                   </Box>
-                </>
+                </Box>
               )}
             </Paper>
 

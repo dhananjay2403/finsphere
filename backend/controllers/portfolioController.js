@@ -48,13 +48,13 @@ const takeSnapshot = async (userId, cashBalance, holdings, quoteResults, quotesS
     await PortfolioSnapshot.findOneAndUpdate(
       { userId, date: today },
       { $set: { totalValue, cashBalance } },
-      { upsert: true, new: true, setDefaultsOnInsert: true }
+      { upsert: true, returnDocument: 'after', setDefaultsOnInsert: true }
     );
   } else {
     await PortfolioSnapshot.findOneAndUpdate(
       { userId, date: today },
       { $setOnInsert: { totalValue, cashBalance } },
-      { upsert: true, new: true, setDefaultsOnInsert: true }
+      { upsert: true, returnDocument: 'after', setDefaultsOnInsert: true }
     );
   }
 };

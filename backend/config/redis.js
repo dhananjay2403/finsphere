@@ -4,6 +4,9 @@ const Redis = require('ioredis');
 // cache-miss instead of throwing, so the app works the same whether or not Redis is reachable.
 
 let client = null;
+// Set once graceful shutdown starts, so in-flight requests whose Redis calls fail as a direct
+// result of that shutdown log as expected — not as a surprise connection failure.
+let shuttingDown = false;
 
 // Opt-in: set CACHE_DEBUG=true to log every cache HIT/MISS/BYPASS and confirm Redis is actually in use.
 const cacheDebug = process.env.CACHE_DEBUG === 'true';
@@ -33,7 +36,7 @@ const cacheGet = async (key) => {
   try {
     return await client.get(key);
   } catch (err) {
-    console.error(`[redis] GET ${key} failed:`, err.message);
+    if (!shuttingDown) console.error(`[redis] GET ${key} failed:`, err.message);
     return null;
   }
 };
@@ -43,7 +46,7 @@ const cacheSet = async (key, value, ttlSeconds) => {
   try {
     await client.set(key, value, 'EX', ttlSeconds);
   } catch (err) {
-    console.error(`[redis] SET ${key} failed:`, err.message);
+    if (!shuttingDown) console.error(`[redis] SET ${key} failed:`, err.message);
   }
 };
 
@@ -68,6 +71,7 @@ const cacheAside = async (key, ttlSeconds, fetchFn) => {
 };
 
 const disconnect = async () => {
+  shuttingDown = true;
   if (!client) return;
   await client.quit().catch(() => {});
 };

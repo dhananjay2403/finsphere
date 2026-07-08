@@ -718,51 +718,56 @@ function Dashboard() {
                 </Typography>
               </Box>
             ) : (
-              <>
-                <Box sx={{ display: 'flex', alignItems: 'baseline', gap: 1, mb: 1.5 }}>
-                  <Typography variant="h4" fontWeight={700} color="primary.main">
-                    {healthData.total}
-                  </Typography>
-                  <Typography variant="body2" color="text.secondary">/ 100</Typography>
-                  <Chip
-                    label={health.text}
-                    size="small"
-                    sx={{
-                      ml: 'auto',
-                      bgcolor: 'rgba(122, 62, 72, 0.08)',
-                      color: health.color,
-                      fontWeight: 600,
-                      fontSize: '0.72rem',
-                      height: 22,
-                    }}
-                  />
+              // Score sits close to the caption above it and metrics anchor to the bottom (matching
+              // Investment Challenge's last stat row) — a single flexible gap between the two groups
+              // instead of centering the whole block, which left an equally odd gap above the score too.
+              <Box sx={{ display: 'flex', flexDirection: 'column', flexGrow: 1, justifyContent: 'space-between' }}>
+                <Box>
+                  <Box sx={{ display: 'flex', alignItems: 'baseline', gap: 1, mb: 1.5 }}>
+                    <Typography variant="h4" fontWeight={700} color="primary.main">
+                      {healthData.total}
+                    </Typography>
+                    <Typography variant="body2" color="text.secondary">/ 100</Typography>
+                    <Chip
+                      label={health.text}
+                      size="small"
+                      sx={{
+                        ml: 'auto',
+                        bgcolor: 'rgba(122, 62, 72, 0.08)',
+                        color: health.color,
+                        fontWeight: 600,
+                        fontSize: '0.72rem',
+                        height: 22,
+                      }}
+                    />
+                  </Box>
+
+                  <Box sx={{ height: 6, bgcolor: '#E8DED5', borderRadius: 3, overflow: 'hidden' }}>
+                    <Box sx={{ height: '100%', width: `${healthData.total}%`, bgcolor: 'primary.main', borderRadius: 3 }} />
+                  </Box>
                 </Box>
 
-                <Box sx={{ height: 6, bgcolor: '#E8DED5', borderRadius: 3, overflow: 'hidden', mb: 2 }}>
-                  <Box sx={{ height: '100%', width: `${healthData.total}%`, bgcolor: 'primary.main', borderRadius: 3 }} />
-                </Box>
-
-                {/* Sub-metrics */}
-                <Grid container spacing={1.5}>
+                {/* Sub-metrics — stacked full-width rows (matching Investment Challenge's stat rows)
+                    instead of three side-by-side boxes, so this uses the same vertical rhythm as its
+                    sibling card rather than clustering into one dense row with empty space around it. */}
+                <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
                   {healthData.metrics.map(({ label, score }) => (
-                    <Grid item xs={4} key={label}>
-                      <Box sx={{ p: 2, bgcolor: '#F8F4EF', borderRadius: 1.5 }}>
-                        <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 0.5 }}>
-                          <Typography variant="caption" color="text.secondary" fontWeight={500} sx={{ fontSize: '0.7rem' }}>
-                            {label}
-                          </Typography>
-                          <Typography variant="caption" fontWeight={700} color="primary.main" sx={{ fontSize: '0.7rem' }}>
-                            {score}
-                          </Typography>
-                        </Box>
-                        <Box sx={{ height: 3, bgcolor: '#E8DED5', borderRadius: 2, overflow: 'hidden' }}>
-                          <Box sx={{ height: '100%', width: `${score}%`, bgcolor: '#C88C96', borderRadius: 2 }} />
-                        </Box>
+                    <Box key={label} sx={{ px: 1.5, py: 1, bgcolor: '#F8F4EF', borderRadius: 1.5 }}>
+                      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 0.5 }}>
+                        <Typography variant="caption" color="text.secondary" fontWeight={500} sx={{ fontSize: '0.78rem' }}>
+                          {label}
+                        </Typography>
+                        <Typography variant="caption" fontWeight={700} color="primary.main" sx={{ fontSize: '0.78rem' }}>
+                          {score}
+                        </Typography>
                       </Box>
-                    </Grid>
+                      <Box sx={{ height: 3, bgcolor: '#E8DED5', borderRadius: 2, overflow: 'hidden' }}>
+                        <Box sx={{ height: '100%', width: `${score}%`, bgcolor: '#C88C96', borderRadius: 2 }} />
+                      </Box>
+                    </Box>
                   ))}
-                </Grid>
-              </>
+                </Box>
+              </Box>
             )}
           </Paper>
         </Grid>

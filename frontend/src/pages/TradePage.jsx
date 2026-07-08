@@ -37,10 +37,11 @@ import AccountBalanceWalletIcon from '@mui/icons-material/AccountBalanceWallet';
 import TrendingUpIcon from '@mui/icons-material/TrendingUp';
 import TrendingDownIcon from '@mui/icons-material/TrendingDown';
 
-import { formatCurrency } from '../utils/helpers';
+import { formatCurrency, formatPercent } from '../utils/helpers';
 import api from '../services/api';
 import stockService from '../services/stockService';
 import tradeService from '../services/tradeService';
+import portfolioService from '../services/portfolioService';
 
 
 const TIMEFRAMES = ['1D', '1W', '1M', '6M', '1Y'];
@@ -216,6 +217,7 @@ function TradePage() {
   // Portfolio state
   const [cashBalance, setCashBalance] = useState(null);
   const [cashLoading, setCashLoading] = useState(true);
+  const [holdings, setHoldings] = useState([]);
 
   // Watchlist state
   const [watchlist, setWatchlist] = useState([]);
@@ -234,6 +236,18 @@ function TradePage() {
       .catch(() => setCashBalance(null))
       .finally(() => setCashLoading(false));
   }, []);
+
+  // Fetch current holdings on mount, and again after every trade — so "your position" stays accurate.
+  const fetchHoldings = useCallback(async () => {
+    try {
+      const data = await portfolioService.getHoldings();
+      setHoldings(data);
+    } catch {
+      // silently ignore — the position panel just won't show
+    }
+  }, []);
+
+  useEffect(() => { fetchHoldings(); }, [fetchHoldings]);
 
   // Fetch watchlist on mount
   const fetchWatchlist = useCallback(async () => {
@@ -362,6 +376,11 @@ function TradePage() {
     setShowDropdown(false);
     setSearchResults([]);
     setQuantity('');
+    // Clear the previous symbol's chart synchronously — otherwise the old price range can flash
+    // on screen for a moment (header already shows the new symbol; the chart-loading effect that
+    // would hide it doesn't fire until the next render pass).
+    setChartData([]);
+    setChartLoading(true);
     loadStock(result.symbol);
   };
 
@@ -403,6 +422,8 @@ function TradePage() {
   const handleClickWatchlistItem = (item) => {
     setSearchQuery(item.symbol);
     setQuantity('');
+    setChartData([]);
+    setChartLoading(true);
     loadStock(item.symbol);
   };
 
@@ -437,9 +458,9 @@ function TradePage() {
         ? await tradeService.buy(payload)
         : await tradeService.sell(payload);
 
-      // Update cash balance and refresh orders
+      // Update cash balance and refresh orders + position
       setCashBalance(result.cashBalance);
-      await fetchRecentOrders();
+      await Promise.all([fetchRecentOrders(), fetchHoldings()]);
 
       setOrderSuccess(
         `Successfully ${type === 'buy' ? 'bought' : 'sold'} ${qty} share${qty > 1 ? 's' : ''} of ${stock.symbol} at ${formatCurrency(stock.price)} each`
@@ -459,6 +480,15 @@ function TradePage() {
   const estimatedTotal = stock && quantity
     ? (parseFloat(quantity) || 0) * stock.price
     : null;
+  const currentHolding = stock ? holdings.find((h) => h.symbol === stock.symbol) : null;
+
+  // Computed explicitly (not via recharts' 'dataMin'/'dataMax' domain strings) — those can momentarily
+  // resolve against a stale/mid-resize container after several client-side route changes, producing a
+  // nonsensical axis scale for a frame. A plain numeric domain sidesteps that entirely.
+  const chartPrices = chartData.map((d) => d.price).filter((p) => typeof p === 'number' && !Number.isNaN(p));
+  const chartYDomain = chartPrices.length > 0
+    ? [Math.min(...chartPrices) - 2, Math.max(...chartPrices) + 2]
+    : ['auto', 'auto'];
 
 
   // Render
@@ -665,10 +695,56 @@ function TradePage() {
                         />
                       </Box>
                     </Box>
+
+                    {/* Current position — lets the user make an informed buy/sell decision before ordering */}
+                    {currentHolding ? (
+                      <Box
+                        sx={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'space-between',
+                          flexWrap: 'wrap',
+                          gap: 1,
+                          p: 1.5,
+                          bgcolor: 'rgba(122, 62, 72, 0.05)',
+                          border: '1px solid rgba(122, 62, 72, 0.15)',
+                          borderRadius: 1.5,
+                        }}
+                      >
+                        <Typography variant="caption" fontWeight={600} color="primary.main" sx={{ fontSize: '0.72rem' }}>
+                          You own {currentHolding.quantity} share{currentHolding.quantity !== 1 ? 's' : ''}
+                        </Typography>
+                        <Box sx={{ display: 'flex', gap: 2 }}>
+                          <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.72rem' }}>
+                            Avg cost <Box component="span" sx={{ color: 'text.primary', fontWeight: 600 }}>${currentHolding.avgCostPrice?.toFixed(2)}</Box>
+                          </Typography>
+                          <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.72rem' }}>
+                            Value <Box component="span" sx={{ color: 'text.primary', fontWeight: 600 }}>
+                              {currentHolding.currentValue != null ? formatCurrency(currentHolding.currentValue) : '—'}
+                            </Box>
+                          </Typography>
+                          {currentHolding.unrealisedPnL != null && (
+                            <Typography
+                              variant="caption"
+                              fontWeight={600}
+                              sx={{ fontSize: '0.72rem', color: currentHolding.unrealisedPnL >= 0 ? '#15803d' : '#dc2626' }}
+                            >
+                              {currentHolding.unrealisedPnL > 0 ? '+' : ''}{formatCurrency(currentHolding.unrealisedPnL)} ({formatPercent(currentHolding.unrealisedPnLPct)})
+                            </Typography>
+                          )}
+                        </Box>
+                      </Box>
+                    ) : (
+                      <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.72rem' }}>
+                        You don&apos;t own any shares of {stock.symbol} yet.
+                      </Typography>
+                    )}
                   </Box>
 
-                  {/* Price Chart */}
-                  <Box sx={{ px: 1.5, pb: 1 }}>
+                  {/* Price Chart — minHeight guards against ResponsiveContainer measuring a collapsed
+                      (0-height) parent during a transient layout pass, which can otherwise make recharts
+                      compute a bogus axis domain for a single frame. */}
+                  <Box sx={{ px: 1.5, pb: 1, minHeight: 200 }}>
                     {chartLoading && <ChartSkeleton />}
                     {!chartLoading && chartError && (
                       <Box sx={{ px: 1.5, pb: 2, textAlign: 'center' }}>
@@ -696,8 +772,8 @@ function TradePage() {
                             tick={{ fontSize: 10, fill: '#6B6B6B' }}
                             tickLine={false}
                             axisLine={false}
-                            tickFormatter={(v) => `$${v}`}
-                            domain={['dataMin - 2', 'dataMax + 2']}
+                            tickFormatter={(v) => `$${Math.round(v)}`}
+                            domain={chartYDomain}
                           />
                           <Tooltip content={<StockChartTooltip />} />
                           <Area

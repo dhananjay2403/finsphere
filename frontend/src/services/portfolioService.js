@@ -1,8 +1,7 @@
 import api from './api';
 
 
-// Wraps /api/portfolio/* — pages should go through this rather than
-// calling api.js directly.
+// Wraps /api/portfolio/* — pages should go through this rather than calling api.js directly.
 
 const portfolioService = {
 
@@ -18,8 +17,7 @@ const portfolioService = {
     return response.data.data;
   },
 
-  // GET /api/portfolio/snapshots — last 90 days; also triggers today's
-  // snapshot write on the backend (non-fatal if it fails)
+  // GET /api/portfolio/snapshots — last 90 days; also triggers today's snapshot write (non-fatal if it fails)
   getSnapshots: async () => {
     const response = await api.get('/portfolio/snapshots');
     return response.data.data;

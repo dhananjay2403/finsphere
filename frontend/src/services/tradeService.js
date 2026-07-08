@@ -5,8 +5,7 @@ import api from './api';
 
 const tradeService = {
 
-  // POST /api/trades/buy — pricePerShare is sent for the request shape but
-  // the backend prices the trade itself
+  // POST /api/trades/buy — pricePerShare is sent for the request shape but the backend prices the trade itself
   buy: async ({ symbol, name, quantity, pricePerShare }) => {
     const response = await api.post('/trades/buy', { symbol, name, quantity, pricePerShare });
     return response.data.data;

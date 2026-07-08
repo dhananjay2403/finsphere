@@ -5,12 +5,10 @@ require('dotenv').config();
 
 const errorHandler = require('./middleware/errorHandler');
 
-// Just the Express app, no DB connection or listen() — kept separate from
-// server.js so app construction isn't tangled up with process bootstrap.
+// Just the Express app, no DB connection or listen() — kept separate from server.js's process bootstrap.
 const app = express();
 
-// Comma-separated allowlist, e.g. the Vercel frontend URL. Falls back to '*'
-// so nothing breaks if CORS_ORIGIN hasn't been set yet.
+// Comma-separated allowlist, e.g. the Vercel frontend URL. Falls back to '*' if CORS_ORIGIN isn't set yet.
 const corsOrigin = process.env.CORS_ORIGIN;
 app.use(cors({
   origin: corsOrigin ? corsOrigin.split(',').map((origin) => origin.trim()) : '*',

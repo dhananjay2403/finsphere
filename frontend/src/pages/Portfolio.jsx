@@ -40,9 +40,7 @@ const SEGMENT_COLORS = [
 ];
 
 
-// Gain/green, loss/red — matches the convention used across the app. (The MUI
-// theme also exposes success/error tokens, but with different hues; unifying
-// those is tracked as future work to avoid a visual regression here.)
+// Gain/green, loss/red — matches the app-wide convention (the MUI theme's success/error tokens use different hues).
 const GAIN_COLOR = '#15803d';
 const LOSS_COLOR = '#dc2626';
 function pnlColor(value) {
@@ -110,12 +108,10 @@ function AllocationTooltip({ active, payload }) {
   );
 }
 
-// Max height of the scrollable holdings area, so the card stays a consistent
-// height as positions are added rather than growing without bound.
+// Max height of the scrollable holdings area, so the card stays a fixed size as positions are added.
 const HOLDINGS_MAX_HEIGHT = 428;
 
-// Sortable columns — `key` maps to a field on each holding. `sortLabel` is the
-// friendlier wording used in the mobile "Sort by" dropdown.
+// Sortable columns — `key` maps to a holding field; `sortLabel` is the friendlier mobile dropdown wording.
 const HOLDING_COLUMNS = [
   { label: 'Stock',     sortLabel: 'Alphabetical',  key: 'symbol',        align: 'left' },
   { label: 'Qty',       sortLabel: 'Quantity',      key: 'quantity',      align: 'right' },
@@ -126,9 +122,7 @@ const HOLDING_COLUMNS = [
 
 const DEFAULT_SORT = { key: 'currentValue', dir: 'desc' };
 
-// Returns holdings sorted by the active key/direction. Symbol sorts
-// alphabetically; numeric columns sort by value with missing quotes (null)
-// always pushed to the bottom regardless of direction.
+// Symbol sorts alphabetically; numeric columns sort by value with missing quotes (null) always last.
 function sortHoldings(holdings, { key, dir }) {
   const sorted = [...holdings];
   sorted.sort((a, b) => {
@@ -149,9 +143,8 @@ function sortHoldings(holdings, { key, dir }) {
   return sorted;
 }
 
-// Desktop holdings table. A real <table> gives every column a shared width, so
-// headers line up perfectly with the values below them; a sticky header + a
-// scrollable container keeps the card a fixed height as positions grow.
+// Desktop holdings table — a real <table> shares column widths so headers align with values, and a
+// sticky header + scrollable container keeps the card a fixed height as positions grow.
 const headCellSx = {
   bgcolor: 'white',
   borderBottom: '2px solid',
@@ -166,8 +159,7 @@ const headCellSx = {
   whiteSpace: 'nowrap',
 };
 
-// Compact body-cell padding so all five columns fit the narrow lg panel
-// without a horizontal scrollbar hiding the P/L column.
+// Compact padding so all five columns fit the narrow lg panel without a scrollbar hiding P/L.
 const bodyCellSx = { px: 0.5 };
 
 function HoldingsTable({ holdings, sort, onSort }) {
@@ -273,8 +265,7 @@ function HoldingsTableSkeleton() {
   );
 }
 
-// Stacked card for narrow screens — keeps long company names from overflowing
-// the panel by truncating the name and pinning the numbers to the right.
+// Stacked card for narrow screens — truncates long company names and pins the numbers to the right.
 function HoldingCardMobile({ holding, isLast }) {
   const hasQuote = holding.currentValue != null;
   const pnl = holding.unrealisedPnL;

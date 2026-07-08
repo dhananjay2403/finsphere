@@ -10,15 +10,13 @@ RUN npm ci
 FROM base AS prod-deps
 RUN npm ci --omit=dev
 
-# Used by docker-compose for local development — source is bind-mounted over
-# this at runtime, so nodemon (a devDependency) picks up changes directly.
+# Used by docker-compose locally — source is bind-mounted over this, so nodemon picks up changes directly.
 FROM deps AS dev
 COPY . .
 EXPOSE 5001
 CMD ["npm", "run", "dev"]
 
-# Lean runtime image. Not used by Render (which deploys from source via
-# render.yaml) — available for any environment that runs containers directly.
+# Lean runtime image — not used by Render (deploys from source via render.yaml), available for self-hosting.
 FROM node:24-alpine AS production
 WORKDIR /app
 ENV NODE_ENV=production
@@ -30,6 +28,5 @@ USER node
 
 EXPOSE 5001
 
-# Exec form so node is PID 1 and receives SIGTERM directly — required for
-# server.js's graceful-shutdown handler to run at all.
+# Exec form so node is PID 1 and receives SIGTERM directly — required for server.js's graceful shutdown.
 CMD ["node", "server.js"]

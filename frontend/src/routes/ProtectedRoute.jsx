@@ -4,11 +4,8 @@ import { useAuth } from '../hooks/useAuth';
 import { ROUTES } from '../utils/constants';
 
 
-// Guards every protected page. Shows a spinner while AuthContext is still
-// validating the stored JWT (avoids a flash of the login redirect), then
-// either sends unauthenticated users to /login — preserving where they were
-// headed — or lets them through. Demo users get a real JWT now, so they're
-// authenticated like anyone else; there's no separate demo bypass anymore.
+// Guards every protected page — spinner only while AuthContext has a token but no cached user yet;
+// otherwise sends unauthenticated users to /login (preserving where they were headed) or lets them through.
 function ProtectedRoute({ children }) {
   const { isAuthenticated, isLoading } = useAuth();
   const location = useLocation();

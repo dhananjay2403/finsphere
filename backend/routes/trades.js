@@ -22,8 +22,7 @@ const quantityRule = body('quantity')
   .notEmpty().withMessage('Quantity is required')
   .isInt({ min: 1 }).withMessage('Quantity must be a whole number of at least 1');
 
-// still required for the request shape, but the controller fetches its own
-// live price rather than trusting this value
+// required for the request shape, but the controller fetches its own live price rather than trusting this
 const priceRule = body('pricePerShare')
   .notEmpty().withMessage('Price per share is required')
   .isFloat({ gt: 0 }).withMessage('Price per share must be greater than 0');

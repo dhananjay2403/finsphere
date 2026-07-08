@@ -4,9 +4,7 @@ const stockService     = require('../services/stockService');
 const { INITIAL_BALANCE } = require('../utils/constants');
 
 
-// Fetches a live quote per holding. Promise.allSettled so one bad quote
-// doesn't block the rest — callers get the settled results and decide how
-// to handle the failures.
+// Fetches a live quote per holding; Promise.allSettled so one bad quote doesn't block the rest.
 const fetchQuotes = async (holdings) => {
   const results = await Promise.allSettled(
     holdings.map((h) => stockService.getQuote(h.symbol))
@@ -26,9 +24,7 @@ const fetchQuotes = async (holdings) => {
 };
 
 
-// Computes today's portfolio value and upserts a snapshot for it. Kept as
-// its own function so it's easy to call from a cron job or after every
-// trade later, not just from GET /snapshots as it is today.
+// Computes today's portfolio value and upserts a snapshot — its own function so it's easy to call from a cron job later.
 const takeSnapshot = async (userId, cashBalance, holdings, quoteResults, quotesSucceeded) => {
   let marketValue = 0;
   holdings.forEach((h, i) => {
@@ -46,12 +42,8 @@ const takeSnapshot = async (userId, cashBalance, holdings, quoteResults, quotesS
   const today = new Date();
   today.setUTCHours(0, 0, 0, 0);
 
-  // Only overwrite today's snapshot if at least one quote actually
-  // succeeded. If Finnhub is down or rate-limited and every quote fails,
-  // every holding falls back to cost price and totalValue collapses to
-  // roughly the starting balance — $setOnInsert means that degraded value
-  // can only create today's snapshot if none exists yet, never overwrite
-  // one already written with real prices.
+  // If every quote failed, totalValue is a degraded cost-basis estimate — $setOnInsert lets it create
+  // today's snapshot but never overwrite one already written with real prices.
   if (quotesSucceeded) {
     await PortfolioSnapshot.findOneAndUpdate(
       { userId, date: today },
@@ -68,8 +60,7 @@ const takeSnapshot = async (userId, cashBalance, holdings, quoteResults, quotesS
 };
 
 
-// GET /api/portfolio/holdings — if a quote fails, price/value fields come
-// back null rather than dropping the position; the UI handles that case.
+// GET /api/portfolio/holdings — if a quote fails, price/value fields come back null rather than dropping the position.
 const getHoldings = async (req, res, next) => {
   try {
     const holdings = await Holding.find({ userId: req.user._id })
@@ -122,17 +113,14 @@ const getHoldings = async (req, res, next) => {
 };
 
 
-// GET /api/portfolio/summary — currentValue sums quantity × live price,
-// falling back to cost basis per-symbol if a quote fails. portfolioValue
-// is just cash + currentValue.
+// GET /api/portfolio/summary — currentValue sums quantity × live price (cost-basis fallback per symbol on a failed quote).
 const getSummary = async (req, res, next) => {
   try {
     const cashBalance = req.user.balance;
     const holdings    = await Holding.find({ userId: req.user._id }).lean();
 
     if (holdings.length === 0) {
-      // No open positions — account value is pure cash. Account-level P&L still
-      // captures any realised gains/losses banked into the cash balance.
+      // No open positions — account value is pure cash, but P&L still reflects any realised gains banked into it.
       const totalPnL = parseFloat((cashBalance - INITIAL_BALANCE).toFixed(2));
       return res.status(200).json({
         success: true,
@@ -177,8 +165,7 @@ const getSummary = async (req, res, next) => {
 
     const portfolioValue = parseFloat((cashBalance + currentValue).toFixed(2));
 
-    // Account-level P&L — total return since inception vs the fixed $100k start
-    // (there are no deposits/withdrawals, so this is realised + unrealised).
+    // Account-level P&L since inception vs the fixed $100k start (no deposits/withdrawals, so realised + unrealised).
     const totalPnL    = parseFloat((portfolioValue - INITIAL_BALANCE).toFixed(2));
     const totalPnLPct = parseFloat(((totalPnL / INITIAL_BALANCE) * 100).toFixed(2));
 
@@ -211,9 +198,7 @@ const getCash = (req, res) => {
 };
 
 
-// GET /api/portfolio/snapshots — writes today's snapshot (best-effort) and
-// returns the last 90 days for the performance chart. Idempotent: the first
-// visit each day creates the snapshot, later visits just update it.
+// GET /api/portfolio/snapshots — writes today's snapshot (best-effort) and returns the last 90 days for the chart.
 const getSnapshots = async (req, res, next) => {
   try {
     const cashBalance = req.user.balance;

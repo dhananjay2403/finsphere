@@ -1,8 +1,7 @@
 const mongoose = require('mongoose');
 
-// A user's current position in one stock — one doc per user+symbol, deleted
-// when quantity hits 0. avgCostPrice is a weighted average, recomputed on every buy:
-//   newAvg = (currentQty*currentAvg + buyQty*buyPrice) / (currentQty+buyQty)
+// A user's position in one stock — one doc per user+symbol, deleted when quantity hits 0.
+// avgCostPrice is a weighted average, recomputed on every buy: newAvg = (currentQty*currentAvg + buyQty*buyPrice) / (currentQty+buyQty)
 const holdingSchema = new mongoose.Schema(
   {
     userId: {

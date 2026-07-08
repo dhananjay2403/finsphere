@@ -1,9 +1,7 @@
 const mongoose = require('mongoose');
 
-// Daily portfolio snapshot used for the dashboard performance chart.
-// totalValue = cashBalance + sum(quantity × price at snapshot time). Written
-// on-demand when the user visits the dashboard rather than by a cron job —
-// simpler for now, and easy to swap later without changing this schema.
+// Daily portfolio value snapshot for the dashboard performance chart; written on-demand on dashboard visits, not via cron.
+// totalValue = cashBalance + sum(quantity × price at snapshot time)
 const portfolioSnapshotSchema = new mongoose.Schema(
   {
     userId: {

@@ -25,8 +25,7 @@ const registerRules = [
     .isLength({ max: 128 }).withMessage('Password cannot exceed 128 characters'),
 ];
 
-// login only checks presence, no format hints — a format error would tell an
-// attacker the account exists
+// login only checks presence, no format hints — a format error would tell an attacker the account exists
 const loginRules = [
   body('email').trim().notEmpty().withMessage('Email is required'),
   body('password').notEmpty().withMessage('Password is required'),

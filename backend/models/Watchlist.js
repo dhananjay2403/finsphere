@@ -1,7 +1,6 @@
 const mongoose = require('mongoose');
 
-// One watchlist doc per user. Symbols are embedded rather than their own
-// collection since they're always read and written together with the user.
+// One watchlist doc per user; symbols are embedded since they're always read/written with the user.
 const watchlistSchema = new mongoose.Schema(
   {
     userId: {

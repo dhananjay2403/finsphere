@@ -1,17 +1,11 @@
 const Redis = require('ioredis');
 
-// Redis is a pure optimisation layer here — if REDIS_URL isn't set, or the
-// connection drops at any point, the app must keep working exactly as it
-// does without caching. Every helper below swallows its own errors and
-// returns a cache-miss-shaped result instead of throwing, so callers never
-// need to know or care whether Redis is actually reachable.
+// Redis is a pure optimisation layer — every helper below swallows its own errors and degrades to a
+// cache-miss instead of throwing, so the app works the same whether or not Redis is reachable.
 
 let client = null;
 
-// Opt-in cache instrumentation. Off by default (zero overhead); set
-// CACHE_DEBUG=true to log every cache HIT / MISS / BYPASS, which makes it easy
-// to confirm from the logs alone that Redis is actually being used in a given
-// environment (prod included) without needing redis-cli.
+// Opt-in: set CACHE_DEBUG=true to log every cache HIT/MISS/BYPASS and confirm Redis is actually in use.
 const cacheDebug = process.env.CACHE_DEBUG === 'true';
 const logCache = (event, key) => {
   if (cacheDebug) console.log(`[cache] ${event} ${key}`);
@@ -27,8 +21,7 @@ if (process.env.REDIS_URL) {
 
   client.on('connect', () => console.log('✓ Redis connected'));
   client.on('error', (err) => {
-    // Logged, never thrown — a down/unreachable Redis must not crash the app.
-    // Connection errors often have an empty .message but a useful .code (e.g. ECONNREFUSED).
+    // Logged, never thrown. err.code (e.g. ECONNREFUSED) is more useful here than err.message, which is often empty.
     console.error('[redis] connection error:', err.code || err.message);
   });
 } else {
@@ -54,10 +47,7 @@ const cacheSet = async (key, value, ttlSeconds) => {
   }
 };
 
-// Standard cache-aside: serve a hit straight from Redis; on a miss, call
-// fetchFn and cache its result. When Redis is unreachable, cacheGet/cacheSet
-// above already degrade to no-ops, so this behaves exactly like an uncached
-// call — same as the app's behaviour before this module existed.
+// Standard cache-aside: serve a hit straight from Redis; on a miss, call fetchFn and cache its result.
 const cacheAside = async (key, ttlSeconds, fetchFn) => {
   const cached = await cacheGet(key);
 

@@ -12,9 +12,7 @@ const DEMO_PASSWORD = 'Demo@finsphere1';
 const DEMO_NAME     = 'Demo User';
 
 
-// Wipes trades, holdings, and watchlist and restores cash for a given user
-// back to the starting state. Idempotent — safe to run on a freshly created
-// account (the deletes simply match nothing).
+// Wipes trades, holdings, and watchlist and restores cash to the starting state. Idempotent on a fresh account.
 const resetAccount = async (userId) => {
   await Promise.all([
     Trade.deleteMany({ userId }),
@@ -51,11 +49,7 @@ const resetDemo = async (req, res, next) => {
 };
 
 
-// POST /api/demo/login — one-shot demo entry: ensures the shared demo account
-// exists (self-provisioning on a fresh/wiped DB), resets it to a clean state,
-// and returns a real JWT — all in a single request. Replaces the old
-// frontend reset→login→(register)→login chain, which failed on cold starts and
-// broke entirely on an empty database.
+// POST /api/demo/login — one-shot demo entry: self-provisions the shared account if missing, resets it, returns a JWT.
 const demoLogin = async (req, res, next) => {
   try {
     let demoUser = await User.findOne({ email: DEMO_EMAIL });

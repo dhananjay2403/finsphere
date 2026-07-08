@@ -4,25 +4,18 @@ const YahooFinanceClass = require('yahoo-finance2').default;
 const yahooFinance = new YahooFinanceClass();
 const { cacheAside, cacheGet, cacheSet, logCache } = require('../config/redis');
 
-// All Finnhub communication lives here — controllers never touch axios or
-// Finnhub directly, so swapping providers later only means changing this
-// file. Every method throws a descriptive Error on failure and lets the
-// controller's try/catch forward it to the global error handler.
+// All Finnhub communication lives here — controllers never touch axios directly, so swapping providers
+// later only means changing this file. Every method throws a descriptive Error for the global handler.
 
 const BASE_URL = 'https://finnhub.io/api/v1';
 
-// Cache TTLs for public market data (quotes, candles, news) — see
-// Milestone 16 for reasoning. Redis is a pure optimisation layer here:
-// cacheAside() degrades to an uncached call if Redis is unreachable.
-const QUOTE_TTL_SECONDS = 30;    // portfolio display prices — 30s keeps them fresh while cutting
-                                 // Finnhub call volume ~3x vs 10s (trades bypass the cache for live prices)
+// Cache TTLs for public market data. cacheAside() degrades to an uncached call if Redis is unreachable.
+const QUOTE_TTL_SECONDS = 30;    // display prices — cuts Finnhub call volume ~3x vs 10s (trades bypass this)
 const CANDLE_TTL_SECONDS = 300;  // 5 min — closed historical bars barely change within a session
 const NEWS_TTL_SECONDS = 120;    // 2 min — headlines don't update second-to-second
 
-// "Last known good" quote retention. On a Finnhub failure (esp. a free-tier 429
-// rate limit) we serve the most recent successful price from here instead of
-// letting the quote fail — which would otherwise make the portfolio's market
-// value collapse to cost basis and its gains appear to vanish until a refresh.
+// Last-known-good quote, kept so a Finnhub failure (e.g. a free-tier 429) can serve a real price instead
+// of collapsing the portfolio's market value to cost basis until the next successful refresh.
 const LAST_QUOTE_TTL_SECONDS = 86_400; // 24h
 
 // Resolved once at module load — fails fast if the key is missing
@@ -42,8 +35,7 @@ const finnhubClient = axios.create({
 });
 
 
-// Wraps every Finnhub call and normalises the error — rate limit, bad
-// key, network failure, or a generic upstream error.
+// Wraps every Finnhub call and normalises the error — rate limit, bad key, network failure, or upstream error.
 const callFinnhub = async (endpoint, params = {}) => {
 
   if (!API_KEY) {
@@ -77,12 +69,8 @@ const callFinnhub = async (endpoint, params = {}) => {
         throw authErr;
       }
 
-      // 403 means the key is valid but the current Finnhub plan doesn't cover
-      // this resource — typically a non-US symbol/exchange on the free tier
-      // (e.g. IVSO.ST). This is NOT an auth failure; reporting it as a bad key
-      // wrongly blames the key. Surface it as "not available" instead, and use
-      // a non-401 status so the frontend's 401 interceptor doesn't log the user
-      // out for simply viewing an unsupported symbol.
+      // 403 = valid key, plan doesn't cover this resource (e.g. a non-US symbol on the free tier) — not an
+      // auth failure, so keep the status non-401 or the frontend's interceptor would wrongly log the user out.
       if (status === 403) {
         const accessErr = new Error(
           params.symbol
@@ -111,12 +99,8 @@ const callFinnhub = async (endpoint, params = {}) => {
 };
 
 
-// Live quote for a symbol — Finnhub's single-letter fields (c, d, dp...)
-// get renamed to something readable below.
-//
-// { skipCache: true } bypasses Redis entirely and always hits Finnhub live —
-// used by trade execution (tradeController.buyStock/sellStock), which must
-// never price a buy/sell off a value that could be a few seconds stale.
+// Live quote for a symbol — Finnhub's single-letter fields (c, d, dp...) get renamed to something readable below.
+// { skipCache: true } bypasses Redis entirely; used by trade execution, which must never price off a stale value.
 const getQuote = async (symbol, { skipCache = false } = {}) => {
   const symbolUpper = symbol.toUpperCase();
 
@@ -164,8 +148,7 @@ const getQuote = async (symbol, { skipCache = false } = {}) => {
     } catch { /* corrupt value — fall through to a live fetch */ }
   }
 
-  // 2) Cache miss — fetch live, and remember it as both the short-lived quote
-  //    and the long-lived "last known good" price.
+  // 2) Cache miss — fetch live, and remember it as both the short-lived quote and the long-lived last-good price.
   logCache('MISS', key);
   try {
     const fresh = await fetchQuote();
@@ -173,10 +156,8 @@ const getQuote = async (symbol, { skipCache = false } = {}) => {
     await cacheSet(lastKey, JSON.stringify(fresh), LAST_QUOTE_TTL_SECONDS);
     return fresh;
   } catch (err) {
-    // 3) Live fetch failed (typically a free-tier 429). Rather than let the
-    //    caller fall back to cost basis — which makes gains appear to vanish —
-    //    serve the last known good price if we have one. A 404 (unknown
-    //    symbol) has no last-good price and correctly propagates.
+    // 3) Live fetch failed (typically a 429) — serve the last known good price instead of erroring.
+    //    A 404 (unknown symbol) has no last-good price cached, so it correctly propagates.
     const last = await cacheGet(lastKey);
     if (last !== null) {
       try {
@@ -279,10 +260,8 @@ const getNews = async (symbol) => {
 };
 
 
-// Historical candles for charting. Finnhub's own candle endpoint is a
-// premium-only feature and 401s on the free tier, so this pulls from Yahoo
-// Finance instead (free, no key needed) and maps Finnhub-style resolution
-// strings onto Yahoo's interval format below.
+// Historical candles for charting. Finnhub's candle endpoint is premium-only (401s on the free tier), so
+// this pulls from Yahoo Finance instead and maps Finnhub-style resolution strings onto Yahoo's intervals.
 const getCandles = async (symbol, resolution = 'D', from, to) => {
   const symbolUpper = symbol.toUpperCase();
 
@@ -292,9 +271,8 @@ const getCandles = async (symbol, resolution = 'D', from, to) => {
   const toTs   = to   ? Number(to)   : now;
   const fromTs = from ? Number(from) : oneYearAgo;
 
-  // Rounded to the nearest minute for the cache key only — the frontend
-  // passes `to = now` on every chart load, so without rounding, near-
-  // identical requests a few seconds apart would never share a cache entry.
+  // Rounded to the nearest minute for the cache key only — the frontend passes `to = now` on every chart
+  // load, so without rounding, near-identical requests a few seconds apart would never share a cache entry.
   const roundedFrom = Math.floor(fromTs / 60) * 60;
   const roundedTo   = Math.floor(toTs   / 60) * 60;
   const cacheKey = `fs:candles:${symbolUpper}:${resolution}:${roundedFrom}:${roundedTo}`;
@@ -373,8 +351,7 @@ const getCandles = async (symbol, resolution = 'D', from, to) => {
 
 
 
-// General market news, no symbol needed — category is one of "general",
-// "forex", "crypto", or "merger".
+// General market news, no symbol needed — category is one of "general", "forex", "crypto", or "merger".
 const getMarketNews = async (category = 'general') => {
 
   const fetchMarketNews = async () => {

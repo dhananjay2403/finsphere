@@ -5,14 +5,8 @@ const Trade = require('../models/Trade');
 const stockService = require('../services/stockService');
 
 
-// POST /api/trades/buy
-//
-// pricePerShare in the body is still validated for API-contract reasons but
-// never used for the actual math — we fetch the live price ourselves and
-// treat it as the only source of truth. If a real price isn't available the
-// trade aborts before touching the database. Balance debit, holding upsert,
-// and the trade record all happen in one transaction, so they succeed or
-// roll back together.
+// POST /api/trades/buy — pricePerShare in the body is validated but never used for the math; we fetch
+// the live price ourselves. Balance debit, holding upsert, and trade record are one transaction.
 const buyStock = async (req, res, next) => {
 
   try {
@@ -20,8 +14,7 @@ const buyStock = async (req, res, next) => {
     const symbolUpper = symbol.trim().toUpperCase();
     const qty = Number(quantity);
 
-    // skipCache: trade execution must always price off a live Finnhub call,
-    // never a cached quote — see Milestone 16.
+    // Always price off a live Finnhub call, never a cached quote.
     const quote = await stockService.getQuote(symbolUpper, { skipCache: true });
 
     if (!Number.isFinite(quote?.price) || quote.price <= 0) {
@@ -33,8 +26,7 @@ const buyStock = async (req, res, next) => {
     const price = quote.price;
     const totalAmount = parseFloat((qty * price).toFixed(2));
 
-    // Quick check to skip opening a transaction in the common case — the
-    // real guard against a negative balance is the atomic update below.
+    // Fast-path check only — the real guard against a negative balance is the atomic update below.
     if (req.user.balance < totalAmount) {
       return res.status(400).json({
         success: false,
@@ -48,8 +40,7 @@ const buyStock = async (req, res, next) => {
     try {
       output = await session.withTransaction(async () => {
 
-        // The $gte guard here — not the pre-check above — is what actually
-        // stops two concurrent buys from driving the balance negative.
+        // The $gte guard here, not the pre-check above, is what stops two concurrent buys going negative.
         const updatedUser = await User.findOneAndUpdate(
           { _id: req.user._id, balance: { $gte: totalAmount } },
           { $inc: { balance: -totalAmount } },
@@ -62,10 +53,8 @@ const buyStock = async (req, res, next) => {
           throw err;
         }
 
-        // One atomic upsert instead of read-then-write, otherwise two
-        // concurrent first-time buys of the same symbol could both try to
-        // create the holding and collide on the unique index.
-        //   newAvg = (currentQty*currentAvg + buyQty*buyPrice) / (currentQty+buyQty)
+        // Atomic upsert, not read-then-write — otherwise two concurrent first buys of the same symbol collide on the unique index.
+        // newAvg = (currentQty*currentAvg + buyQty*buyPrice) / (currentQty+buyQty)
         await Holding.findOneAndUpdate(
           { userId: req.user._id, symbol: symbolUpper },
           [{
@@ -135,11 +124,8 @@ const buyStock = async (req, res, next) => {
 };
 
 
-// POST /api/trades/sell
-//
-// Same rule as buy, but trusting a client-supplied price here is worse — an
-// inflated sell price would let someone fabricate cash. We fetch the real
-// price ourselves; if we can't get one, the trade aborts before any write.
+// POST /api/trades/sell — same rule as buy; trusting a client-supplied price is worse here since an
+// inflated one would fabricate cash.
 const sellStock = async (req, res, next) => {
 
   try {
@@ -147,8 +133,7 @@ const sellStock = async (req, res, next) => {
     const symbolUpper = symbol.trim().toUpperCase();
     const qty = Number(quantity);
 
-    // skipCache: trade execution must always price off a live Finnhub call,
-    // never a cached quote — see Milestone 16.
+    // Always price off a live Finnhub call, never a cached quote.
     const quote = await stockService.getQuote(symbolUpper, { skipCache: true });
 
     if (!Number.isFinite(quote?.price) || quote.price <= 0) {
@@ -166,11 +151,7 @@ const sellStock = async (req, res, next) => {
     try {
       output = await session.withTransaction(async () => {
 
-        // This $gte-guarded decrement is the actual race fix — two
-        // concurrent sells of the same holding can no longer both read the
-        // same quantity, both pass the check, and both credit the balance.
-        // Mongo serializes the update, so only a request with enough shares
-        // left actually succeeds.
+        // The $gte-guarded decrement is the race fix — Mongo serializes it, so two concurrent sells can't both succeed on the same shares.
         const updatedHolding = await Holding.findOneAndUpdate(
           { userId: req.user._id, symbol: symbolUpper, quantity: { $gte: qty } },
           { $inc: { quantity: -qty } },
@@ -178,8 +159,7 @@ const sellStock = async (req, res, next) => {
         );
 
         if (!updatedHolding) {
-          // Only hit the DB again to tell "doesn't exist" apart from "not
-          // enough" — no extra cost on the success path above.
+          // Only hit the DB again to tell "doesn't exist" apart from "not enough" — no cost on the success path.
           const existing = await Holding.findOne({ userId: req.user._id, symbol: symbolUpper }).session(session);
 
           const err = new Error(

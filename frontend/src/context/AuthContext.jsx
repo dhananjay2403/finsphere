@@ -19,15 +19,12 @@ function readCachedUser() {
 
 export function AuthProvider({ children }) {
 
-  // Hydrate synchronously from localStorage so a returning visitor is
-  // authenticated on the very first render — no blocking spinner while the
-  // token is validated. This is what removes the "app hangs briefly on
-  // refresh" symptom: the cold-start /auth/me round-trip no longer gates the UI.
+  // Hydrate synchronously from localStorage so a returning visitor is authenticated on the very first
+  // render — no blocking spinner while /auth/me validates in the background (see effect below).
   const [token, setToken] = useState(() => localStorage.getItem(LOCAL_STORAGE_KEYS.TOKEN));
   const [user, setUser]   = useState(() => readCachedUser());
 
-  // Only block the UI in the rare case where we have a token but no cached
-  // user to render with; otherwise the app renders immediately.
+  // Only blocks the UI in the rare case of a token with no cached user to render with.
   const [isLoading, setIsLoading] = useState(() => {
     const storedToken = localStorage.getItem(LOCAL_STORAGE_KEYS.TOKEN);
     return Boolean(storedToken) && !readCachedUser();
@@ -56,11 +53,8 @@ export function AuthProvider({ children }) {
 
     let cancelled = false;
 
-    // Validate/refresh in the background. The session is already live from the
-    // cached values above, so this call can only *upgrade* it (fresh user) or
-    // *revoke* it (a genuine 401). A longer per-request timeout absorbs cold
-    // starts; a timeout or network error deliberately leaves the session intact
-    // so a slow/asleep backend never logs a valid user out.
+    // Validate/refresh in the background — can only *upgrade* the session (fresh user) or *revoke* it (a
+    // genuine 401). A timeout/network error deliberately leaves it intact so a slow backend can't log anyone out.
     authService.getProfile({ timeout: 20_000 })
       .then(({ user: freshUser }) => {
         if (cancelled) return;
@@ -69,9 +63,8 @@ export function AuthProvider({ children }) {
       })
       .catch((err) => {
         if (cancelled) return;
-        // Only a real 401 means the token is invalid/expired — clear it.
-        // (Note: /auth/me is exempt from the 401 redirect interceptor, so the
-        // error reaches us here and we handle the logout ourselves.)
+        // Only a real 401 means the token is invalid/expired — clear it (/auth/me is exempt from the
+        // interceptor's auto-redirect, so the error reaches us here and we handle the logout ourselves).
         if (err.response?.status === 401) {
           logout();
         }

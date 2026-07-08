@@ -13,8 +13,7 @@ router.get('/summary',   protect, getSummary);
 // GET /api/portfolio/cash      — available cash balance only
 router.get('/cash',      protect, getCash);
 
-// GET /api/portfolio/snapshots — value history for the performance chart, also
-// upserts today's snapshot as a side effect
+// GET /api/portfolio/snapshots — value history for the chart; also upserts today's snapshot as a side effect
 router.get('/snapshots', protect, getSnapshots);
 
 module.exports = router;

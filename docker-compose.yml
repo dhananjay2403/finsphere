@@ -1,9 +1,5 @@
-# Local development stack — frontend (Vite) + backend (nodemon) + MongoDB +
-# Redis. `docker compose up` is the only command needed.
-#
-# Prefer MongoDB Atlas over the local container? Replace MONGO_URI in
-# backend/.env with your Atlas connection string — nothing else changes.
-# The mongo container keeps running but simply goes unused.
+# Local dev stack — frontend (Vite) + backend (nodemon) + MongoDB + Redis. `docker compose up` and go.
+# Prefer Atlas over the local Mongo container? Just swap MONGO_URI in backend/.env — the mongo service stays unused.
 
 services:
   backend:
@@ -15,10 +11,7 @@ services:
     env_file:
       - ./backend/.env
     environment:
-      # Redis has no external-alternative concern like Mongo/Atlas does, so
-      # this always points at the compose network's redis service. MONGO_URI
-      # is intentionally NOT overridden here — it comes straight from
-      # backend/.env, so switching to Atlas is a one-line env change.
+      # Always the compose network's redis service (no Atlas-style alternative to worry about).
       REDIS_URL: redis://redis:6379
     volumes:
       - ./backend:/app
@@ -37,8 +30,7 @@ services:
     ports:
       - "3000:3000"
     environment:
-      # Points at the backend's published host port — the browser (not the
-      # frontend container) makes this request, so it must be host-reachable.
+      # The browser (not the frontend container) makes this request, so it must be host-reachable.
       VITE_API_URL: http://localhost:5001/api
     volumes:
       - ./frontend:/app
@@ -49,19 +41,12 @@ services:
 
   mongo:
     image: mongo:7
-    # Trade execution uses mongoose session transactions, which require a
-    # replica set — a plain standalone mongod rejects them outright.
-    # --replSet turns this single node into a (single-member) replica set;
-    # the healthcheck below initiates it on first run.
+    # Trade execution uses mongoose session transactions, which need a replica set — plain mongod rejects them.
     command: ["--replSet", "rs0"]
     volumes:
       - mongo-data:/data/db
     healthcheck:
-      # config/db.js exits the process on a failed initial connection, so the
-      # backend must wait for an actual PRIMARY, not just a started
-      # container. The first run initiates the replica set and reports
-      # unhealthy; a single-node set always finishes electing itself primary
-      # by the next interval.
+      # config/db.js exits on a failed initial connection, so wait for an actual PRIMARY, not just a started container.
       test: >
         mongosh --quiet --eval
         "try { quit(rs.status().members.some(m => m.stateStr === 'PRIMARY') ? 0 : 1) }
@@ -74,8 +59,7 @@ services:
 
   redis:
     image: redis:7-alpine
-    # No ports published — only the backend needs to reach this, over the
-    # internal compose network.
+    # No ports published — only the backend reaches this, over the internal compose network.
     restart: unless-stopped
 
 volumes:

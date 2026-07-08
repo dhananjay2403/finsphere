@@ -58,8 +58,7 @@ const TIMEFRAME_CONFIG = {
 const DEBOUNCE_MS = 400;
 
 
-// Converts candles from stockService.getHistory into recharts-ready
-// { time, price } points.
+// Converts candles from stockService.getHistory into recharts-ready { time, price } points.
 function candlesToChartData(candles = [], resolution) {
   return candles.map((c) => {
     const date = new Date(c.time * 1000);

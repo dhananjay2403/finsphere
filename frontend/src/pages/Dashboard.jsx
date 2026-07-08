@@ -52,14 +52,11 @@ function getHealthLabel(score) {
 
 const clampScore = (n) => Math.max(0, Math.min(100, n));
 
-// Component weights — sum to 1. Kept as a named constant so the methodology is
-// explicit and easy to tune.
+// Component weights — sum to 1, named so the methodology is explicit and easy to tune.
 const HEALTH_WEIGHTS = { diversification: 0.40, concentration: 0.30, deployment: 0.30 };
 
-// Portfolio Health Score (0–100). Measures portfolio *construction and risk*,
-// and is deliberately independent of investment performance — returns are
-// market outcomes (luck/skill), not structural health, so a sound portfolio
-// can be temporarily down and still score well. Three deterministic axes:
+// Portfolio Health Score (0–100): measures construction and risk, deliberately independent of investment
+// performance (returns are market outcomes, not structural health). Three deterministic axes:
 //
 //   Diversification (40%) — how evenly spread across positions, via the
 //     Herfindahl-Hirschman Index. wᵢ = position market value / total holdings
@@ -76,8 +73,8 @@ const HEALTH_WEIGHTS = { diversification: 0.40, concentration: 0.30, deployment:
 //     50–90% → 100; below 50% scales linearly (r / 0.50); above 90% a mild
 //     penalty down to 70 at fully invested (no cash cushion).
 //
-// Weights use market value (currentValue), falling back to cost basis when a
-// live quote is missing. An empty portfolio is "Not rated" rather than 0.
+// Weights use market value (currentValue), falling back to cost basis when a quote is missing; an
+// empty portfolio is "Not rated" rather than 0.
 function computeHealthScore({ holdings, summary }) {
   const list = holdings ?? [];
 
@@ -150,11 +147,8 @@ function buildDashboardAllocations(holdings) {
     }));
 }
 
-// Prefers real snapshots (actual portfolio value at the time they were
-// written) for the chart. If none exist yet, approximates from trade
-// history instead — walking trades chronologically and using cash +
-// cumulative cost-at-purchase, which ignores unrealised P&L but beats a
-// flat line. Returns [{ day: 'Jun 12', value: 98400 }, ...].
+// Prefers real snapshots for the chart; if none exist yet, approximates from trade history instead —
+// cash + cumulative cost-at-purchase, which ignores unrealised P&L but beats a flat line.
 function buildPerformanceChart(trades, cashBalance, snapshots) {
   if (snapshots && snapshots.length > 0) {
     return snapshots.map((s) => ({

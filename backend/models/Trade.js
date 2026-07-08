@@ -1,8 +1,6 @@
 const mongoose = require('mongoose');
 
-// Write-once record of a buy or sell — never updated after creation.
-// pricePerShare is the actual execution price; totalAmount is pre-computed
-// for display. createdAt (from timestamps) doubles as the trade timestamp.
+// Write-once record of a buy or sell. totalAmount is pre-computed for display; createdAt doubles as the trade timestamp.
 const tradeSchema = new mongoose.Schema(
   {
     userId: {

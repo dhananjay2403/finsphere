@@ -20,13 +20,8 @@ const getWatchlist = async (req, res, next) => {
 };
 
 
-// POST /api/watchlist — body: { symbol, name }
-//
-// The 'symbols.symbol': { $ne } filter only matches when the symbol isn't
-// already in the array, so $push only runs for a genuinely new entry — an
-// atomic way to prevent duplicates without a separate read first. upsert:
-// true also creates the Watchlist doc on a user's first-ever add. If the
-// symbol's already there, the filter just doesn't match and we get null back.
+// POST /api/watchlist — body: { symbol, name }. The 'symbols.symbol': { $ne } filter only matches when the
+// symbol isn't already in the array, so $push is an atomic dedupe check — already there means null comes back.
 const addToWatchlist = async (req, res, next) => {
 
   try {

@@ -1,8 +1,7 @@
 import api from './api';
 
 
-// Wraps /api/stocks/* — pages and components should go through this rather
-// than calling api.js directly.
+// Wraps /api/stocks/* — pages and components should go through this rather than calling api.js directly.
 
 const stockService = {
 
@@ -24,8 +23,7 @@ const stockService = {
     return response.data.data;
   },
 
-  // GET /api/stocks/history/:symbol — resolution is one of "1","5","15","30",
-  // "60","D","W","M"; from/to are unix seconds, default to the last year
+  // GET /api/stocks/history/:symbol — resolution is one of "1","5","15","30","60","D","W","M"; from/to are unix seconds
   getHistory: async (symbol, resolution = 'D', from, to) => {
     const params = { resolution };
     if (from) params.from = from;

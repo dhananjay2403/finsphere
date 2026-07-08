@@ -481,7 +481,7 @@ function LandingPage() {
             py: { xs: 6, md: 12 },
           }}
         >
-          <Box>
+          <Box sx={{ textAlign: { xs: 'center', md: 'left' } }}>
             <Chip
               label="Paper trading · No real money required"
               size="small"
@@ -514,13 +514,13 @@ function LandingPage() {
             <Typography
               variant="body1"
               color="text.secondary"
-              sx={{ maxWidth: 440, mb: 3.5, fontSize: '1.05rem', lineHeight: 1.75 }}
+              sx={{ maxWidth: 440, mb: 3.5, fontSize: '1.05rem', lineHeight: 1.75, textAlign: { xs: 'center', md: 'left' }, mx: { xs: 'auto', md: 0 } }}
             >
               FinSphere gives you $100,000 in virtual capital to practice stock trading,
               track your portfolio, and build real investing confidence.
             </Typography>
 
-            <Box sx={{ display: 'flex', gap: 1.5, flexWrap: 'wrap', alignItems: 'center' }}>
+            <Box sx={{ display: 'flex', gap: 1.5, flexWrap: 'wrap', alignItems: 'center', justifyContent: { xs: 'center', md: 'flex-start' } }}>
               <Button
                 component={Link}
                 to={ROUTES.REGISTER}
@@ -567,17 +567,41 @@ function LandingPage() {
       {/* Trust Bar */}
       <Box sx={{ borderTop: '1px solid', borderColor: 'divider', bgcolor: '#FFFDFB' }}>
         <Container maxWidth="lg">
+          {/* Desktop: unchanged 4-column stretched grid. */}
           <Box
             sx={{
-              display: 'grid',
-              gridTemplateColumns: { xs: '1fr 1fr', md: 'repeat(4, 1fr)' },
-              gap: { xs: 1.5, md: 4 },
-              py: { xs: 2.5, md: 3.5 },
+              display: { xs: 'none', md: 'grid' },
+              gridTemplateColumns: 'repeat(4, 1fr)',
+              gap: 4,
+              py: 3.5,
             }}
           >
             {TRUST_ITEMS.map((item) => (
               <Box key={item} sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                 <CheckCircleOutlineIcon sx={{ color: 'primary.main', fontSize: 18 }} />
+                <Typography variant="body2" fontWeight={500} color="text.secondary">
+                  {item}
+                </Typography>
+              </Box>
+            ))}
+          </Box>
+
+          {/* Mobile: flex-wrap with a fixed per-item basis + justifyContent:'center' — every wrapped row
+              consumes the same total width (2 × basis + gap) regardless of how long each row's text is,
+              so centering gives the SAME left/right margin on every row. A grid with auto-sized columns
+              couldn't guarantee this, since column widths can differ row-to-row based on content length. */}
+          <Box
+            sx={{
+              display: { xs: 'flex', md: 'none' },
+              flexWrap: 'wrap',
+              justifyContent: 'center',
+              gap: 2,
+              py: 2.5,
+            }}
+          >
+            {TRUST_ITEMS.map((item) => (
+              <Box key={item} sx={{ display: 'flex', alignItems: 'center', gap: 1, flex: '0 1 45%' }}>
+                <CheckCircleOutlineIcon sx={{ color: 'primary.main', fontSize: 18, flexShrink: 0 }} />
                 <Typography variant="body2" fontWeight={500} color="text.secondary">
                   {item}
                 </Typography>
@@ -725,6 +749,11 @@ function LandingPage() {
               display: { xs: 'flex', sm: 'none' },
               overflowX: 'auto',
               scrollSnapType: 'x mandatory',
+              // Tells the browser's snap algorithm to respect this padding as the effective edge, so the
+              // last card can snap flush against it instead of the mandatory 'start' points on every card
+              // permanently stranding the last card's peek-width remainder off-screen.
+              scrollPaddingLeft: 16,
+              scrollPaddingRight: 16,
               gap: 2,
               pb: 1.5,
               mx: -2,
@@ -736,11 +765,11 @@ function LandingPage() {
               '&::after': { content: '""', flexShrink: 0, width: 1 },
             }}
           >
-            {FEATURES.map(({ icon, title, description }) => (
+            {FEATURES.map(({ icon, title, description }, i) => (
               <Box
                 key={title}
                 sx={{
-                  scrollSnapAlign: 'start',
+                  scrollSnapAlign: i === FEATURES.length - 1 ? 'end' : 'start',
                   flexShrink: 0,
                   width: '85%',
                 }}
@@ -822,6 +851,10 @@ function LandingPage() {
               display: { xs: 'flex', sm: 'none' },
               overflowX: 'auto',
               scrollSnapType: 'x mandatory',
+              // See the matching carousel above — lets the last card snap flush against this padding
+              // instead of stranding its peek-width remainder off-screen as extra trailing whitespace.
+              scrollPaddingLeft: 16,
+              scrollPaddingRight: 16,
               gap: 2,
               pb: 1.5,
               mx: -2,
@@ -834,11 +867,11 @@ function LandingPage() {
               '&::after': { content: '""', flexShrink: 0, width: 1 },
             }}
           >
-            {PRODUCT_PREVIEWS.map(({ title, description, preview }) => (
+            {PRODUCT_PREVIEWS.map(({ title, description, preview }, i) => (
               <Box
                 key={title}
                 sx={{
-                  scrollSnapAlign: 'start',
+                  scrollSnapAlign: i === PRODUCT_PREVIEWS.length - 1 ? 'end' : 'start',
                   flexShrink: 0,
                   width: '85%',
                 }}
@@ -987,7 +1020,7 @@ function LandingPage() {
             sx={{
               display: 'flex',
               flexDirection: { xs: 'column', sm: 'row' },
-              alignItems: { xs: 'flex-start', sm: 'center' },
+              alignItems: 'center',
               justifyContent: 'space-between',
               gap: 2,
             }}
@@ -999,7 +1032,7 @@ function LandingPage() {
               </Typography>
             </Box>
 
-            <Box sx={{ display: 'flex', gap: { xs: 2, md: 3 }, flexWrap: 'wrap' }}>
+            <Box sx={{ display: 'flex', gap: { xs: 2, md: 3 }, flexWrap: 'wrap', justifyContent: 'center' }}>
               {FOOTER_LINKS.map(({ label, path, href }) =>
                 href ? (
                   <Typography

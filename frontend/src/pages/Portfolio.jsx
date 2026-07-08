@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useLocation } from 'react-router-dom';
 import {
   Box,
   Container,
@@ -110,6 +111,13 @@ function AllocationTooltip({ active, payload }) {
 
 // Max height of the scrollable holdings area, so the card stays a fixed size as positions are added.
 const HOLDINGS_MAX_HEIGHT = 428;
+
+// Mobile gets a shorter cap: a tall inner-scrolling list on a touch device is a "scroll trap" — the
+// browser exhausts the nested scroll before handing the gesture back to the page, so it can take
+// several swipes before the rest of the page (Cash Available, P&L) continues scrolling. Sized to show
+// 3 full cards plus a sliver of the 4th (a visible scroll hint) while still leaving Cash Available
+// reachable without much scrolling.
+const HOLDINGS_MAX_HEIGHT_MOBILE = 320;
 
 // Sortable columns — `key` maps to a holding field; `sortLabel` is the friendlier mobile dropdown wording.
 const HOLDING_COLUMNS = [
@@ -344,6 +352,16 @@ function Portfolio() {
 
   useEffect(() => { fetchData(); }, [fetchData]);
 
+  // Dashboard's Allocation "View All" links here with #allocation so this page opens scrolled straight
+  // to that card instead of the top — wait for the data to finish loading first, since the Allocation
+  // card isn't in its final (scrollable) position until the skeleton is replaced with real content.
+  const location = useLocation();
+  useEffect(() => {
+    if (location.hash === '#allocation' && !holdingsLoading) {
+      document.getElementById('allocation')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+  }, [location.hash, holdingsLoading]);
+
 
   const allocationSegments = buildAllocationSegments(holdings);
   const hasHoldings = holdings.length > 0;
@@ -463,8 +481,8 @@ function Portfolio() {
                   <HoldingsTable holdings={sortedHoldings} sort={sort} onSort={handleSort} />
                 </Box>
 
-                {/* Mobile stacked cards — scroll once the list gets long */}
-                <Box sx={{ display: { xs: 'block', md: 'none' }, maxHeight: HOLDINGS_MAX_HEIGHT, overflowY: 'auto' }}>
+                {/* Mobile stacked cards — scroll once the list gets long (shorter cap than desktop, see above) */}
+                <Box sx={{ display: { xs: 'block', md: 'none' }, maxHeight: HOLDINGS_MAX_HEIGHT_MOBILE, overflowY: 'auto' }}>
                   {sortedHoldings.map((holding, idx) => (
                     <HoldingCardMobile
                       key={holding._id}
@@ -573,7 +591,7 @@ function Portfolio() {
 
         {/* Right column — Allocation (above) + Portfolio Breakdown */}
         <Grid item xs={12} md={6} lg={3}>
-          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+          <Box id="allocation" sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
 
             {/* Allocation donut chart — appears first */}
             <Paper

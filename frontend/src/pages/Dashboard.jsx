@@ -642,7 +642,7 @@ function Dashboard() {
             <Button
               size="small"
               endIcon={<ArrowForwardIcon sx={{ fontSize: 14 }} />}
-              onClick={() => navigate(ROUTES.PORTFOLIO)}
+              onClick={() => navigate(`${ROUTES.PORTFOLIO}#allocation`)}
               sx={{
                 mt: 2,
                 color: 'primary.main',
@@ -749,8 +749,11 @@ function Dashboard() {
 
                 {/* Sub-metrics — stacked full-width rows (matching Investment Challenge's stat rows)
                     instead of three side-by-side boxes, so this uses the same vertical rhythm as its
-                    sibling card rather than clustering into one dense row with empty space around it. */}
-                <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+                    sibling card rather than clustering into one dense row with empty space around it.
+                    On mobile the two cards stack (no taller sibling to stretch against), so the
+                    justifyContent:'space-between' above has no slack to distribute — add an explicit
+                    top margin there so the gap above these rows doesn't collapse to near-zero. */}
+                <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1, mt: { xs: 3, md: 0 } }}>
                   {healthData.metrics.map(({ label, score }) => (
                     <Box key={label} sx={{ px: 1.5, py: 1, bgcolor: '#F8F4EF', borderRadius: 1.5 }}>
                       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 0.5 }}>

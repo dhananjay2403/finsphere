@@ -394,7 +394,8 @@ function Portfolio() {
       <Grid container spacing={2.5}>
 
         {/* ── Left column — Holdings table (wider at lg so all 5 columns fit) ── */}
-        <Grid item xs={12} md={12} lg={6}>
+        {/* Mobile order: P&L → Cash → Holdings → Allocation → Breakdown (desktop order:0 = unchanged) */}
+        <Grid item xs={12} md={12} lg={6} sx={{ order: { xs: 2, md: 0 } }}>
           <Paper
             elevation={0}
             sx={{
@@ -459,7 +460,7 @@ function Portfolio() {
                     size="small"
                     value={sort.key}
                     onChange={(e) => setSort({ key: e.target.value, dir: e.target.value === 'symbol' ? 'asc' : 'desc' })}
-                    sx={{ flex: 1, fontSize: '0.8rem', '& .MuiSelect-select': { py: 0.5 } }}
+                    sx={{ flex: 1, fontSize: '0.8rem', '& .MuiSelect-select': { py: 0.5, textAlign: 'center' } }}
                   >
                     {HOLDING_COLUMNS.map(({ key, sortLabel }) => (
                       <MenuItem key={key} value={key} sx={{ fontSize: '0.8rem' }}>{sortLabel}</MenuItem>
@@ -497,13 +498,13 @@ function Portfolio() {
         </Grid>
 
         {/* Middle column — Cash Available + P&L Summary */}
-        <Grid item xs={12} md={6} lg={3}>
+        <Grid item xs={12} md={6} lg={3} sx={{ order: { xs: 1, md: 0 } }}>
           <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
 
             {/* Cash available */}
             <Paper
               elevation={0}
-              sx={{ p: 3, border: '1px solid', borderColor: 'divider', borderRadius: 2, bgcolor: 'white' }}
+              sx={{ p: 3, border: '1px solid', borderColor: 'divider', borderRadius: 2, bgcolor: 'white', order: { xs: 2, md: 0 } }}
             >
               <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 1.5 }}>
                 <Typography variant="body2" color="text.secondary" fontWeight={500}>
@@ -525,7 +526,7 @@ function Portfolio() {
             {/* P&L Summary */}
             <Paper
               elevation={0}
-              sx={{ p: 3, border: '1px solid', borderColor: 'divider', borderRadius: 2, bgcolor: 'white' }}
+              sx={{ p: 3, border: '1px solid', borderColor: 'divider', borderRadius: 2, bgcolor: 'white', order: { xs: 1, md: 0 } }}
             >
               <Typography variant="body1" fontWeight={600} mb={2}>
                 P&amp;L Summary
@@ -590,7 +591,7 @@ function Portfolio() {
         </Grid>
 
         {/* Right column — Allocation (above) + Portfolio Breakdown */}
-        <Grid item xs={12} md={6} lg={3}>
+        <Grid item xs={12} md={6} lg={3} sx={{ order: { xs: 3, md: 0 } }}>
           <Box id="allocation" sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
 
             {/* Allocation donut chart — appears first */}
@@ -697,14 +698,21 @@ function Portfolio() {
                     ))}
                   </Box>
 
-                  {allocationSegments.map(({ label, pct, color }) => (
+                  {allocationSegments.map(({ label, fullName, pct, color }) => (
                     <Box
                       key={label}
                       sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', py: 0.75 }}
                     >
                       <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                         <Box sx={{ width: 8, height: 8, borderRadius: '50%', bgcolor: color, flexShrink: 0 }} />
-                        <Typography variant="body2" color="text.secondary">{label}</Typography>
+                        <Typography variant="body2" color="text.secondary">
+                          {label}
+                          {fullName && fullName !== label && (
+                            <Typography component="span" variant="caption" color="text.secondary" sx={{ ml: 0.5 }}>
+                              ({fullName})
+                            </Typography>
+                          )}
+                        </Typography>
                       </Box>
                       <Typography variant="body2" fontWeight={600}>{pct}%</Typography>
                     </Box>

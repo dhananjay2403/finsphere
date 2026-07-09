@@ -142,6 +142,7 @@ function buildDashboardAllocations(holdings) {
     .slice(0, 3)
     .map((h, i) => ({
       label: h.symbol,
+      name: h.name,
       pct: parseFloat(((h.totalInvested / total) * 100).toFixed(1)),
       color: ALLOC_COLORS[i],
     }));
@@ -308,6 +309,11 @@ function RecentTxRow({ trade }) {
           <Typography variant="body2" fontWeight={600} lineHeight={1.2}>
             {trade.symbol}
           </Typography>
+          {trade.name && (
+            <Typography variant="caption" color="text.secondary" noWrap sx={{ display: 'block', fontSize: '0.68rem' }}>
+              {trade.name}
+            </Typography>
+          )}
           <Typography variant="caption" color="text.secondary">
             {isBuy ? 'Buy' : 'Sell'} · {trade.quantity} sh @ ${trade.pricePerShare?.toFixed(2)}
           </Typography>
@@ -625,10 +631,17 @@ function Dashboard() {
               </Box>
             ) : (
               <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5, flex: 1 }}>
-                {allocations.map(({ label, pct, color }) => (
+                {allocations.map(({ label, name, pct, color }) => (
                   <Box key={label}>
-                    <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 0.5 }}>
-                      <Typography variant="body2" color="text.secondary" fontWeight={500}>{label}</Typography>
+                    <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 0.5 }}>
+                      <Box>
+                        <Typography variant="body2" color="text.secondary" fontWeight={500}>{label}</Typography>
+                        {name && (
+                          <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.68rem', display: 'block' }}>
+                            {name}
+                          </Typography>
+                        )}
+                      </Box>
                       <Typography variant="body2" fontWeight={600}>{pct}%</Typography>
                     </Box>
                     <Box sx={{ height: 6, bgcolor: '#F0E9E2', borderRadius: 3, overflow: 'hidden' }}>

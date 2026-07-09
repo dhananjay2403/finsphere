@@ -30,6 +30,7 @@ import {
   CartesianGrid,
 } from 'recharts';
 import SearchIcon from '@mui/icons-material/Search';
+import BookmarkIcon from '@mui/icons-material/Bookmark';
 import BookmarkBorderIcon from '@mui/icons-material/BookmarkBorder';
 import ReceiptLongIcon from '@mui/icons-material/ReceiptLong';
 import CloseIcon from '@mui/icons-material/Close';
@@ -694,6 +695,14 @@ function TradePage() {
                           }}
                         />
                       </Box>
+                      <IconButton
+                        size="small"
+                        onClick={() => (isInWatchlist ? handleRemoveFromWatchlist(stock.symbol) : handleAddToWatchlist())}
+                        aria-label={isInWatchlist ? 'Remove from watchlist' : 'Add to watchlist'}
+                        sx={{ color: isInWatchlist ? 'primary.main' : 'text.secondary' }}
+                      >
+                        {isInWatchlist ? <BookmarkIcon fontSize="small" /> : <BookmarkBorderIcon fontSize="small" />}
+                      </IconButton>
                     </Box>
 
                     {/* Current position — lets the user make an informed buy/sell decision before ordering */}
@@ -1124,25 +1133,6 @@ function TradePage() {
                 <Typography variant="caption" color="error" sx={{ mt: 1, display: 'block' }}>
                   {watchlistError}
                 </Typography>
-              )}
-
-              {/* Add current stock to watchlist */}
-              {stock && (
-                <Button
-                  size="small"
-                  variant="outlined"
-                  onClick={handleAddToWatchlist}
-                  disabled={isInWatchlist}
-                  sx={{
-                    mt: 2,
-                    borderColor: 'primary.main',
-                    color: 'primary.main',
-                    fontSize: '0.8rem',
-                    '&:hover': { bgcolor: 'rgba(122, 62, 72, 0.04)' },
-                  }}
-                >
-                  {isInWatchlist ? `${stock.symbol} saved` : `+ Add ${stock.symbol} to Watchlist`}
-                </Button>
               )}
             </Paper>
 
